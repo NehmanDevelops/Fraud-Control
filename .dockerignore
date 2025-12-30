@@ -1,0 +1,66 @@
+# FraudGuard Simulator - Production Build Ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Models & Data
+backend/models/*.pkl
+backend/models/*.joblib
+backend/data/*.csv
+!backend/data/.gitkeep
+
+# Build outputs
+dist/
+build/
+
+# Temporary
+*.tmp
+*.log
+.cache/
+
+# OS
+Thumbs.db
+.DS_Store
+*.swp
+
+# Git
+.git/
+.gitignore
