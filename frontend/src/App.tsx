@@ -82,7 +82,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-background text-text">
       {/* Header */}
-      <header className="border-b border-border p-4 flex justify-between items-center bg-card">
+      <header className="border-b border-border p-4 flex justify-between items-center bg-card shadow-[0_0_20px_rgba(16,185,129,0.05)]">
         <div className="flex items-center gap-2">
           <ShieldAlert className="text-primary w-8 h-8" />
           <h1 className="text-xl font-bold tracking-tight">FraudGuard <span className="text-primary">Simulator</span></h1>
