@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldAlert, ShieldCheck, Play, Pause, Zap, Activity, PieChart as PieChartIcon,
-  Info, AlertTriangle, Download, Moon, Sun
+  Info, AlertTriangle, Download, Moon, Sun, Search, Filter, FileJson
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -58,6 +58,11 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [useDemoMode, setUseDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterRiskLevel, setFilterRiskLevel] = useState<'all' | 'low' | 'medium' | 'high'>('all');
+  const [filterFraudOnly, setFilterFraudOnly] = useState(false);
+  const [minAmount, setMinAmount] = useState(0);
+  const [maxAmount, setMaxAmount] = useState(10000);
   const ws = useRef<WebSocket | null>(null);
   const wsReconnectRef = useRef<NodeJS.Timeout>();
 
@@ -173,6 +178,62 @@ export default function App() {
   const scheduleReconnect = () => {
     if (wsReconnectRef.current) clearTimeout(wsReconnectRef.current);
     wsReconnectRef.current = setTimeout(connectWS, 3000);
+  };
+
+  // Filter transactions based on all criteria
+  const filteredTransactions = transactions.filter(tx => {
+    const matchesSearch = searchQuery === '' ||
+      tx.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.timestamp.includes(searchQuery);
+    
+    const matchesRisk = filterRiskLevel === 'all' || tx.risk_level === filterRiskLevel;
+    const matchesFraud = !filterFraudOnly || tx.is_fraud;
+    const matchesAmount = tx.amount >= minAmount && tx.amount <= maxAmount;
+    
+    return matchesSearch && matchesRisk && matchesFraud && matchesAmount;
+  });
+
+  // Export transactions to JSON
+  const exportToJSON = () => {
+    const dataStr = JSON.stringify(filteredTransactions, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transactions-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Export transactions to CSV
+  const exportToCSV = () => {
+    if (filteredTransactions.length === 0) return;
+    
+    const headers = ['ID', 'Timestamp', 'Amount', 'Risk Score', 'Risk Level', 'Is Fraud', 'XGBoost', 'Isolation Forest', 'Rule Based'];
+    const rows = filteredTransactions.map(tx => [
+      tx.id,
+      tx.timestamp,
+      tx.amount,
+      tx.risk_score.toFixed(4),
+      tx.risk_level,
+      tx.is_fraud ? 'TRUE' : 'FALSE',
+      tx.xgboost_score.toFixed(4),
+      tx.isolation_forest_score.toFixed(4),
+      tx.rule_based_score.toFixed(4),
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transactions-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -361,16 +422,110 @@ export default function App() {
 
           {/* Transaction Table */}
           <div className={`flex-1 ${darkMode ? 'bg-slate-900' : 'bg-white'} m-6 mt-4 rounded-xl border ${darkMode ? 'border-slate-800' : 'border-gray-200'} flex flex-col overflow-hidden`}>
-            <div className={`px-6 py-4 border-b ${darkMode ? 'border-slate-800 bg-slate-800/30' : 'border-gray-200 bg-gray-50'} flex justify-between items-center`}>
-              <h3 className="text-sm font-bold">Transaction Feed ({transactions.length})</h3>
-              <span className="text-xs text-gray-500">Latest First</span>
+            <div className={`px-6 py-4 border-b ${darkMode ? 'border-slate-800 bg-slate-800/30' : 'border-gray-200 bg-gray-50'} space-y-3`}>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-bold">Transaction Feed ({filteredTransactions.length})</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={exportToJSON}
+                    disabled={filteredTransactions.length === 0}
+                    className="px-3 py-1 text-xs rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                    title="Export as JSON"
+                  >
+                    <FileJson size={14} /> JSON
+                  </button>
+                  <button
+                    onClick={exportToCSV}
+                    disabled={filteredTransactions.length === 0}
+                    className="px-3 py-1 text-xs rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                    title="Export as CSV"
+                  >
+                    <Download size={14} /> CSV
+                  </button>
+                </div>
+              </div>
+
+              {/* Search and Filter Controls */}
+              <div className="space-y-2">
+                {/* Search Bar */}
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-gray-100 border-gray-300'}`}>
+                  <Search size={16} className="text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search by ID or timestamp..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`flex-1 bg-transparent outline-none text-sm ${darkMode ? 'text-white placeholder-gray-500' : 'text-slate-900 placeholder-gray-400'}`}
+                  />
+                </div>
+
+                {/* Filter Controls */}
+                <div className="grid grid-cols-4 gap-2">
+                  <select
+                    value={filterRiskLevel}
+                    onChange={(e) => setFilterRiskLevel(e.target.value as any)}
+                    className={`px-3 py-2 rounded-lg text-xs border ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`}
+                  >
+                    <option value="all">All Risk Levels</option>
+                    <option value="low">Low Risk</option>
+                    <option value="medium">Medium Risk</option>
+                    <option value="high">High Risk</option>
+                  </select>
+
+                  <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-xs ${
+                    filterFraudOnly
+                      ? darkMode ? 'bg-red-500/20 border-red-500/50' : 'bg-red-50 border-red-200'
+                      : darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={filterFraudOnly}
+                      onChange={(e) => setFilterFraudOnly(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span>Fraud Only</span>
+                  </label>
+
+                  <div className="px-3 py-2 rounded-lg border text-xs space-y-1" style={{
+                    backgroundColor: darkMode ? '#1e293b' : '#f3f4f6',
+                    borderColor: darkMode ? '#475569' : '#d1d5db',
+                  }}>
+                    <label className="block text-gray-500">Min: ${minAmount}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10000"
+                      step="100"
+                      value={minAmount}
+                      onChange={(e) => setMinAmount(parseInt(e.target.value))}
+                      className="w-full accent-emerald-500 h-1"
+                    />
+                  </div>
+
+                  <div className="px-3 py-2 rounded-lg border text-xs space-y-1" style={{
+                    backgroundColor: darkMode ? '#1e293b' : '#f3f4f6',
+                    borderColor: darkMode ? '#475569' : '#d1d5db',
+                  }}>
+                    <label className="block text-gray-500">Max: ${maxAmount}</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10000"
+                      step="100"
+                      value={maxAmount}
+                      onChange={(e) => setMaxAmount(parseInt(e.target.value))}
+                      className="w-full accent-emerald-500 h-1"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {transactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
                   <div className="text-center">
-                    <p>No transactions yet</p>
-                    <p className="text-xs mt-2">Click "Start" to begin simulation</p>
+                    <p>{transactions.length === 0 ? 'No transactions yet' : 'No transactions match your filters'}</p>
+                    <p className="text-xs mt-2">{transactions.length === 0 ? 'Click "Start" to begin simulation' : 'Try adjusting your search or filter criteria'}</p>
                   </div>
                 </div>
               ) : (
@@ -388,7 +543,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((tx) => (
+                    {filteredTransactions.map((tx) => (
                       <tr
                         key={tx.id}
                         onClick={() => setSelectedTx(tx)}
