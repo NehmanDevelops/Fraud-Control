@@ -1,8 +1,60 @@
 # FraudGuard Simulator 🛡️
 
+<div align="center">
+
 A production-ready, real-time banking fraud detection dashboard built with **React + Python FastAPI**, featuring ensemble ML models, SHAP explainability, and recruiter demo mode.
 
 **Designed to impress RBC Borealis AI and Canadian bank recruiters** with focus on responsible AI, explainability, and high-performance fraud detection.
+
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Tailwind](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![SHAP](https://img.shields.io/badge/SHAP-Explainability-blueviolet?style=flat-square)](https://shap.readthedocs.io)
+
+</div>
+
+---
+
+## 📸 Screenshots
+
+### 1. Onboarding Experience
+<p align="center">
+  <img src="docs/screenshots/01-onboarding.png" alt="Onboarding Card - Welcome screen with feature highlights" width="800">
+</p>
+
+*First-time users see an elegant onboarding card with feature highlights, inspired by modern fintech apps like Wise and Revolut. Clear CTAs guide users to start the simulator or load demo data.*
+
+### 2. Real-Time Transaction Streaming
+<p align="center">
+  <img src="docs/screenshots/02-streaming.png" alt="Transaction Feed - Live streaming with fraud detection" width="800">
+</p>
+
+*Watch transactions stream in real-time with instant fraud classification. Each transaction shows risk scores, status badges, and model confidence levels. Inspired by CIBC fraud alerts and RBC NOMI Insights.*
+
+### 3. SHAP Explainability Panel
+<p align="center">
+  <img src="docs/screenshots/03-shap-modal.png" alt="SHAP Explanations - Feature contribution breakdown" width="800">
+</p>
+
+*Click any transaction to reveal detailed SHAP explanations. See exactly which PCA features drove the fraud decision, with contribution bars showing direction and magnitude. This transparency aligns with RBC Borealis AI's responsible AI principles.*
+
+### 4. Metrics Dashboard & Visualizations
+<p align="center">
+  <img src="docs/screenshots/04-metrics-dashboard.png" alt="Analytics Dashboard - Charts and KPIs" width="800">
+</p>
+
+*Professional analytics dashboard featuring risk timeline charts, fraud distribution pie charts, and model performance comparisons. Inspired by Google Cloud Vertex AI and H2O.ai dashboards.*
+
+### 5. Mobile Responsive Design
+<p align="center">
+  <img src="docs/screenshots/05-mobile-view.png" alt="Mobile View - Responsive layout for all devices" width="400">
+</p>
+
+*Fully responsive design works beautifully on mobile devices. Toggle between transaction feed and analytics with bottom navigation. Perfect for on-the-go fraud monitoring.*
+
+> 📝 **Note**: To generate these screenshots, run the application locally and capture the views as shown above. Place images in `docs/screenshots/` directory.
 
 ---
 
@@ -141,31 +193,79 @@ Navigate to `http://localhost:5173` in your browser.
 ```
 Fraud-Detection/
 ├── backend/
-│   ├── main.py                 # FastAPI application
+│   ├── main.py                 # FastAPI application & WebSocket streaming
 │   ├── dataset.py             # Data loading & preprocessing
-│   ├── models_ml.py           # XGBoost, Isolation Forest, Rule-based
+│   ├── models_ml.py           # XGBoost, Isolation Forest, Rule-based ensemble
 │   ├── shap_explainer.py      # SHAP explanation engine
-│   ├── requirements.txt        # Python dependencies
+│   ├── config.py              # Application configuration
+│   ├── logger.py              # Structured logging
+│   ├── exceptions.py          # Custom exception handling
+│   ├── requirements.txt       # Python dependencies
+│   ├── Dockerfile             # Backend container config
 │   ├── models/                # Trained model artifacts (.pkl)
 │   └── data/
-│       └── creditcard.csv     # Kaggle dataset
+│       └── creditcard.csv     # Kaggle dataset (280K transactions)
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx            # Main React component
-│   │   ├── App.css            # Component styles
-│   │   ├── main.tsx           # Entry point
-│   │   └── index.css          # Global styles
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   └── tsconfig.json
+│   │   ├── App.tsx            # Main application with responsive layout
+│   │   ├── main.tsx           # React entry point
+│   │   ├── index.css          # Global styles, animations, utilities
+│   │   │
+│   │   ├── lib/
+│   │   │   └── utils.ts       # Utility functions (cn, formatters, risk colors)
+│   │   │
+│   │   ├── types/
+│   │   │   └── index.ts       # TypeScript interfaces (Transaction, AppStats, etc.)
+│   │   │
+│   │   ├── hooks/
+│   │   │   ├── useSimulator.ts    # WebSocket & API state management
+│   │   │   └── useTheme.ts        # Theme persistence & system detection
+│   │   │
+│   │   └── components/
+│   │       ├── ui/                # Reusable UI primitives
+│   │       │   ├── Button.tsx     # Button variants (primary, danger, ghost, etc.)
+│   │       │   ├── Card.tsx       # Card, StatCard, FeatureCard
+│   │       │   ├── Badge.tsx      # Badge, StatusDot, RiskIndicator
+│   │       │   ├── Input.tsx      # Input, Select, Slider, Toggle
+│   │       │   ├── Modal.tsx      # Animated modal with Framer Motion
+│   │       │   └── index.ts       # Component exports
+│   │       │
+│   │       ├── layout/            # Layout components
+│   │       │   ├── Header.tsx     # Main header with controls & branding
+│   │       │   ├── Sidebar.tsx    # Control panel, filters, metrics
+│   │       │   └── index.ts       # Layout exports
+│   │       │
+│   │       └── dashboard/         # Feature components
+│   │           ├── TransactionFeed.tsx    # Real-time transaction list
+│   │           ├── TransactionDetail.tsx  # SHAP explanations panel
+│   │           ├── MetricsDashboard.tsx   # Charts & visualizations
+│   │           ├── OnboardingCard.tsx     # First-time user welcome
+│   │           └── index.ts               # Dashboard exports
+│   │
+│   ├── package.json           # Node.js dependencies
+│   ├── vite.config.ts         # Vite build configuration
+│   ├── tailwind.config.js     # Extended Tailwind theme
+│   ├── tsconfig.json          # TypeScript configuration
+│   └── Dockerfile             # Frontend container config
 │
 ├── scripts/
 │   ├── evaluate.py            # Model evaluation script
-│   └── evaluation_metrics.json # Performance report
+│   └── generate_data.py       # Synthetic data generator
 │
-└── README.md
+├── tests/
+│   └── test_backend.py        # Backend API tests
+│
+├── docs/
+│   └── screenshots/           # Application screenshots
+│
+├── docker-compose.yml         # Multi-container orchestration
+├── API.md                     # API documentation
+├── ARCHITECTURE.md            # System architecture overview
+├── CONTRIBUTING.md            # Contribution guidelines
+├── DEPLOYMENT.md              # Deployment instructions
+├── SECURITY.md                # Security considerations
+└── README.md                  # This file
 ```
 
 ---
@@ -389,11 +489,38 @@ ROC-AUC:    98.7% ✓
 | **Backend API** | FastAPI | Fast, modern, built-in docs, async support |
 | **ML Models** | XGBoost, scikit-learn | Industry standard, proven performance |
 | **Anomaly Detection** | Isolation Forest | Unsupervised, handles imbalanced data |
-| **Explainability** | SHAP | Model-agnostic, local explanations, LIME-based |
-| **Frontend** | React + Vite | Fast builds, modern dev experience |
-| **Styling** | Tailwind CSS | Utility-first, responsive, dark mode ready |
+| **Explainability** | SHAP | Model-agnostic, local explanations, TreeSHAP |
+| **Frontend** | React 18 + TypeScript | Type-safe, modern hooks, excellent DX |
+| **Build Tool** | Vite | Fast HMR, optimized builds |
+| **Styling** | Tailwind CSS 3.4 | Utility-first, responsive, custom theming |
+| **Animations** | Framer Motion | Smooth, declarative animations |
 | **Charts** | Recharts | React-native, composable, accessible |
-| **Icons** | Lucide React | Beautiful, consistent icon library |
+| **Icons** | Lucide React | Beautiful, consistent, tree-shakable |
+
+---
+
+## 🎨 UI Design Philosophy
+
+### Design Inspiration
+This dashboard draws inspiration from:
+- **RBC NOMI Insights**: Clear financial data presentation, trust-building blue palette
+- **CIBC Fraud Alerts**: Urgent but non-alarming alert design, status indicators
+- **Wise/Revolut**: Clean transaction feeds, modern fintech aesthetic
+- **H2O.ai/Google Vertex AI**: Professional ML dashboard patterns, data visualization
+
+### Visual Language
+- **Color Palette**: Blues for trust and safety, red/orange for fraud alerts, emerald for confirmed safe
+- **Typography**: Inter for UI clarity, JetBrains Mono for technical data
+- **Spacing**: Generous whitespace for visual breathing room
+- **Depth**: Subtle shadows and glass morphism for layer hierarchy
+- **Motion**: Purposeful animations that enhance UX without distracting
+
+### Accessibility
+- High contrast ratios (WCAG AA compliant)
+- Keyboard navigation support
+- Screen reader friendly components
+- Reduced motion support
+- Clear focus indicators
 
 ---
 
