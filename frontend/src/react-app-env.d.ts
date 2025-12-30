@@ -2,6 +2,31 @@
 /// <reference types="react" />
 /// <reference types="react-dom" />
 
+// Fix for Recharts + React 18 type incompatibility
+// See: https://github.com/recharts/recharts/issues/3615
+import type { ReactNode } from 'react';
+
+declare module 'recharts' {
+  export interface ResponsiveContainerProps {
+    children: ReactNode;
+  }
+  export interface AreaChartProps {
+    children: ReactNode;
+  }
+  export interface LineChartProps {
+    children: ReactNode;
+  }
+  export interface PieChartProps {
+    children: ReactNode;
+  }
+  export interface BarChartProps {
+    children: ReactNode;
+  }
+  export interface PieProps {
+    children: ReactNode;
+  }
+}
+
 declare namespace NodeJS {
   interface Process{
     env: ProcessEnv
