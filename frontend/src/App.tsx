@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ShieldAlert, ShieldCheck, Play, Pause, FastForward,
-  Activity, PieChart, Info, AlertTriangle, Zap
+  ShieldAlert, ShieldCheck, Play, Pause, Zap, Activity, PieChart as PieChartIcon,
+  Info, AlertTriangle, Download, Moon, Sun
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -17,31 +17,75 @@ interface Transaction {
   timestamp: string;
   amount: number;
   risk_score: number;
+  risk_level: 'low' | 'medium' | 'high';
   is_fraud: boolean;
-  is_suspicious: boolean;
-  features: Record<string, number>;
-  shap_values: number[];
-  feature_names: string[];
+  ground_truth: boolean;
+  xgboost_score: number;
+  isolation_forest_score: number;
+  rule_based_score: number;
+  features: number[];
+  feature_count: number;
+  stats: {
+    total_processed: number;
+    total_fraud: number;
+  };
+}
+
+interface AppStats {
+  is_running: boolean;
+  speed: number;
+  fraud_rate: number;
+  transactions_processed: number;
+  fraud_count: number;
+  models_ready: boolean;
+  dataset_stats: any;
 }
 
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [speed, setSpeed] = useState(1.0);
-  const [metrics, setMetrics] = useState({ accuracy: 0.98, recall: 0.96, precision: 0.94 });
+  const [stats, setStats] = useState<AppStats>({
+    is_running: false,
+    speed: 1,
+    fraud_rate: 0.01,
+    transactions_processed: 0,
+    fraud_count: 0,
+    models_ready: false,
+    dataset_stats: null
+  });
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [useDemoMode, setUseDemoMode] = useState(false);
+  const [loading, setLoading] = useState(true);
   const ws = useRef<WebSocket | null>(null);
+  const wsReconnectRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    fetchMetrics();
-    return () => ws.current?.close();
+    fetchStatus();
+    const statusInterval = setInterval(fetchStatus, 3000);
+    
+    return () => {
+      clearInterval(statusInterval);
+      if (wsReconnectRef.current) clearTimeout(wsReconnectRef.current);
+      ws.current?.close();
+    };
   }, []);
 
-  const fetchMetrics = async () => {
+  useEffect(() => {
+    if (isRunning && !ws.current) {
+      connectWS();
+    }
+  }, [isRunning]);
+
+  const fetchStatus = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/metrics`);
-      setMetrics(res.data);
-    } catch (e) { console.error(e); }
+      const res = await axios.get(`${API_BASE}/status`);
+      setStats(res.data);
+      setLoading(false);
+    } catch (e) {
+      console.error('Status fetch error:', e);
+    }
   };
 
   const toggleSimulation = async () => {
@@ -49,258 +93,421 @@ export default function App() {
       if (isRunning) {
         await axios.post(`${API_BASE}/control/stop`);
         ws.current?.close();
+        ws.current = null;
       } else {
         await axios.post(`${API_BASE}/control/start`);
         connectWS();
       }
       setIsRunning(!isRunning);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('Toggle simulation error:', e);
+    }
+  };
+
+  const loadDemoData = async () => {
+    try {
+      setUseDemoMode(!useDemoMode);
+      const res = await axios.get(`${API_BASE}/demo-data?limit=100`);
+      if (Array.isArray(res.data)) {
+        setTransactions(res.data);
+      }
+    } catch (e) {
+      console.error('Demo data load error:', e);
+    }
   };
 
   const updateSpeed = async (val: number) => {
     setSpeed(val);
-    await axios.post(`${API_BASE}/control/speed?speed=${val}`);
+    try {
+      await axios.post(`${API_BASE}/control/config`, {
+        speed: val,
+        fraud_rate: stats.fraud_rate,
+        inject_fraud: false,
+        use_demo_mode: false
+      });
+    } catch (e) {
+      console.error('Speed update error:', e);
+    }
   };
 
   const injectFraud = async () => {
-    await axios.post(`${API_BASE}/control/inject`);
+    try {
+      await axios.post(`${API_BASE}/control/config`, {
+        speed: speed,
+        fraud_rate: stats.fraud_rate,
+        inject_fraud: true,
+        use_demo_mode: false
+      });
+    } catch (e) {
+      console.error('Inject fraud error:', e);
+    }
   };
 
   const connectWS = () => {
-    ws.current = new WebSocket(WS_BASE);
-    ws.current.onmessage = (event) => {
-      const tx = JSON.parse(event.data);
-      setTransactions(prev => [tx, ...prev].slice(0, 50));
-    };
+    try {
+      ws.current = new WebSocket(WS_BASE);
+      ws.current.onmessage = (event) => {
+        try {
+          const tx = JSON.parse(event.data);
+          setTransactions(prev => [tx, ...prev].slice(0, 100));
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+      ws.current.onerror = () => {
+        console.error('WebSocket error');
+        scheduleReconnect();
+      };
+      ws.current.onclose = () => {
+        ws.current = null;
+        if (isRunning) {
+          scheduleReconnect();
+        }
+      };
+    } catch (e) {
+      console.error('WebSocket connection error:', e);
+      scheduleReconnect();
+    }
   };
 
+  const scheduleReconnect = () => {
+    if (wsReconnectRef.current) clearTimeout(wsReconnectRef.current);
+    wsReconnectRef.current = setTimeout(connectWS, 3000);
+  };
+
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center h-screen ${darkMode ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+        <div className="text-center">
+          <ShieldAlert className="w-12 h-12 mb-4 mx-auto animate-pulse text-emerald-500" />
+          <p className="text-lg font-semibold">Initializing FraudGuard...</p>
+          <p className="text-sm text-gray-500 mt-2">Loading models and dataset</p>
+        </div>
+      </div>
+    );
+  }
+
   const fraudRatioData = [
-    { name: 'Legit', value: transactions.filter(t => !t.is_fraud).length + 100 }, // +100 for base
-    { name: 'Fraud', value: transactions.filter(t => t.is_fraud).length + 2 },
+    { name: 'Legitimate', value: stats.transactions_processed - stats.fraud_count },
+    { name: 'Fraud', value: stats.fraud_count },
   ];
 
+  const riskDistribution = [
+    { name: 'Low Risk', value: transactions.filter(t => t.risk_level === 'low').length },
+    { name: 'Medium Risk', value: transactions.filter(t => t.risk_level === 'medium').length },
+    { name: 'High Risk', value: transactions.filter(t => t.risk_level === 'high').length },
+  ];
+
+  const chartData = transactions.slice(0, 30).reverse().map((t, i) => ({
+    name: `T${i}`,
+    risk: parseFloat((t.risk_score * 100).toFixed(1))
+  }));
+
   return (
-    <div className="flex flex-col h-screen bg-background text-text">
+    <div className={`flex flex-col h-screen ${darkMode ? 'bg-slate-950 text-white' : 'bg-gray-50 text-slate-900'}`}>
       {/* Header */}
-      <header className="border-b border-border p-4 flex justify-between items-center bg-card shadow-[0_0_20px_rgba(16,185,129,0.05)]">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="text-primary w-8 h-8" />
-          <h1 className="text-xl font-bold tracking-tight">FraudGuard <span className="text-primary">Simulator</span></h1>
+      <header className={`border-b ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} p-4 flex justify-between items-center shadow-sm`}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-emerald-500/10">
+            <ShieldAlert className="text-emerald-500 w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">FraudGuard <span className="text-emerald-500">Simulator</span></h1>
+            <p className="text-xs text-gray-500">Real-time Fraud Detection Dashboard</p>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <button onClick={injectFraud} className="bg-danger/20 hover:bg-danger/30 text-danger border border-danger/50 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all">
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`p-2 rounded-lg border ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-gray-100 border-gray-300 hover:bg-gray-200'}`}
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          
+          <button
+            onClick={loadDemoData}
+            className={`px-4 py-2 rounded-lg border flex items-center gap-2 text-sm font-medium transition-all ${
+              useDemoMode
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
+                : darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-gray-100 border-gray-300'
+            }`}
+          >
+            <Download size={16} /> {useDemoMode ? 'Demo Active' : 'Load Demo'}
+          </button>
+
+          <button
+            onClick={injectFraud}
+            className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 text-sm font-medium flex items-center gap-2 transition-all"
+          >
             <Zap size={16} /> Inject Fraud
           </button>
-          <button onClick={toggleSimulation} className={`px-6 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${isRunning ? 'bg-warning/20 text-warning border border-warning/50' : 'bg-primary text-white'}`}>
-            {isRunning ? <><Pause size={16} /> Stop Simulator</> : <><Play size={16} /> Run Simulator</>}
+
+          <button
+            onClick={toggleSimulation}
+            className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
+              isRunning
+                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                : 'bg-emerald-500 text-white hover:bg-emerald-600'
+            }`}
+          >
+            {isRunning ? <><Pause size={16} /> Stop</> : <><Play size={16} /> Start</>}
           </button>
         </div>
       </header>
 
-      <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar Controls */}
-        <aside className="w-64 border-r border-border p-6 bg-card flex flex-col gap-8">
+      <main className={`flex-1 flex overflow-hidden ${darkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
+        {/* Sidebar */}
+        <aside className={`w-72 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} border-r p-6 flex flex-col gap-8 overflow-y-auto`}>
           <div>
-            <h3 className="text-xs uppercase font-bold text-muted mb-4 tracking-widest">Simulator Controls</h3>
+            <h3 className="text-xs uppercase font-bold text-gray-500 mb-4 tracking-widest">Simulator Controls</h3>
             <div className="space-y-6">
               <div>
-                <label className="text-sm font-medium text-muted mb-2 block flex justify-between">
-                  Process Interval <span>{speed}s</span>
+                <label className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-2 block flex justify-between`}>
+                  Transaction Interval <span className="font-bold text-white">{speed.toFixed(1)}s</span>
                 </label>
                 <input
                   type="range" min="0.1" max="3" step="0.1"
                   value={speed} onChange={(e) => updateSpeed(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-primary"
+                  className="w-full accent-emerald-500 cursor-pointer"
                 />
               </div>
-              <div className="p-4 bg-background rounded-xl border border-border">
-                <div className="text-sm font-bold mb-1">Status</div>
-                <div className={`text-xs flex items-center gap-2 ${isRunning ? 'text-primary' : 'text-muted'}`}>
-                  <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
-                  {isRunning ? 'System Active' : 'System Standby'}
+
+              <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="text-sm font-bold mb-2">System Status</div>
+                <div className={`text-xs flex items-center gap-2 ${isRunning ? 'text-emerald-400' : 'text-gray-500'}`}>
+                  <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-gray-500'}`} />
+                  {isRunning ? 'Running' : 'Idle'}
                 </div>
+                <div className="text-xs text-gray-500 mt-2">Models: {stats.models_ready ? '✓ Ready' : '✗ Loading'}</div>
               </div>
             </div>
           </div>
 
           <div>
-            <h3 className="text-xs uppercase font-bold text-muted mb-4 tracking-widest">Model Metrics</h3>
+            <h3 className="text-xs uppercase font-bold text-gray-500 mb-4 tracking-widest">Performance</h3>
             <div className="space-y-3">
-              <MetricItem label="Recall" value={`${(metrics.recall * 100).toFixed(1)}%`} color="text-primary" />
-              <MetricItem label="Precision" value={`${(metrics.precision * 100).toFixed(1)}%`} color="text-secondary" />
-              <MetricItem label="Accuracy" value={`${(metrics.accuracy * 100).toFixed(1)}%`} color="text-text" />
+              <StatItem label="Transactions" value={stats.transactions_processed.toString()} darkMode={darkMode} />
+              <StatItem label="Fraud Detected" value={stats.fraud_count.toString()} darkMode={darkMode} color="text-red-400" />
+              <StatItem label="Detection Rate" value={stats.transactions_processed > 0 ? ((stats.fraud_count / stats.transactions_processed * 100).toFixed(2) + '%') : '0%'} darkMode={darkMode} color="text-blue-400" />
             </div>
           </div>
+
+          {stats.dataset_stats && (
+            <div className={`p-4 rounded-xl border ${darkMode ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
+              <h4 className="text-xs font-bold mb-3 flex items-center gap-2">
+                <ShieldCheck size={14} className="text-emerald-500" /> Dataset Info
+              </h4>
+              <div className="text-xs space-y-1">
+                <div>Total: {stats.dataset_stats.total_transactions?.toLocaleString() || 'N/A'}</div>
+                <div>Fraud: {stats.dataset_stats.fraud_count?.toLocaleString() || 'N/A'}</div>
+                <div>Rate: {stats.dataset_stats.fraud_percentage?.toFixed(2) || 'N/A'}%</div>
+              </div>
+            </div>
+          )}
         </aside>
 
-        {/* Dashboard Content */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 h-64">
+        {/* Main Dashboard */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Charts Section */}
+          <div className="grid grid-cols-3 gap-4 p-6 pb-0">
+            <div className={`rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} p-6 h-80`}>
               <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-                <Activity size={16} className="text-primary" /> Live Risk Wave
+                <Activity size={16} className="text-emerald-500" /> Risk Timeline
               </h3>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={transactions.slice(0, 20).reverse()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f1f23" />
-                  <XAxis dataKey="id" hide />
-                  <YAxis hide domain={[0, 100]} />
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#e5e7eb'} />
+                  <XAxis dataKey="name" stroke={darkMode ? '#64748b' : '#9ca3af'} style={{ fontSize: '12px' }} />
+                  <YAxis stroke={darkMode ? '#64748b' : '#9ca3af'} domain={[0, 100]} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#111114', borderColor: '#1f1f23', borderRadius: '12px' }}
-                    labelStyle={{ color: '#a1a1aa' }}
+                    contentStyle={{
+                      backgroundColor: darkMode ? '#1e293b' : '#f3f4f6',
+                      border: `1px solid ${darkMode ? '#334155' : '#e5e7eb'}`,
+                      borderRadius: '8px'
+                    }}
                   />
-                  <Line type="monotone" dataKey="risk_score" stroke="#10b981" strokeWidth={3} dot={false} animationDuration={300} />
+                  <Line type="monotone" dataKey="risk" stroke="#10b981" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-6 h-64 flex flex-col items-center">
-              <h3 className="text-sm font-bold mb-2 flex items-center gap-2 self-start">
-                <PieChart size={16} className="text-secondary" /> Fraud Distribution
+            <div className={`rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} p-6 h-80 flex flex-col`}>
+              <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+                <PieChartIcon size={16} className="text-blue-500" /> Overall Distribution
               </h3>
               <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
-                  <Pie
-                    data={fraudRatioData}
-                    cx="50%" cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
+                  <Pie data={fraudRatioData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={2}>
                     <Cell fill="#10b981" />
                     <Cell fill="#ef4444" />
                   </Pie>
                 </RePieChart>
               </ResponsiveContainer>
             </div>
+
+            <div className={`rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} p-6 h-80`}>
+              <h3 className="text-sm font-bold mb-4">Risk Breakdown</h3>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={riskDistribution} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#e5e7eb'} />
+                  <XAxis type="number" stroke={darkMode ? '#64748b' : '#9ca3af'} style={{ fontSize: '12px' }} />
+                  <YAxis dataKey="name" type="category" width={80} stroke={darkMode ? '#64748b' : '#9ca3af'} style={{ fontSize: '11px' }} />
+                  <Bar dataKey="value" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="flex-1 bg-card border border-border rounded-2xl flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border bg-white/5 flex justify-between items-center">
-              <h3 className="text-sm font-bold">Transaction Feed</h3>
-              <span className="text-xs text-muted">{transactions.length} processed</span>
+          {/* Transaction Table */}
+          <div className={`flex-1 ${darkMode ? 'bg-slate-900' : 'bg-white'} m-6 mt-4 rounded-xl border ${darkMode ? 'border-slate-800' : 'border-gray-200'} flex flex-col overflow-hidden`}>
+            <div className={`px-6 py-4 border-b ${darkMode ? 'border-slate-800 bg-slate-800/30' : 'border-gray-200 bg-gray-50'} flex justify-between items-center`}>
+              <h3 className="text-sm font-bold">Transaction Feed ({transactions.length})</h3>
+              <span className="text-xs text-gray-500">Latest First</span>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-left">
-                <thead className="sticky top-0 bg-card border-b border-border text-xs text-muted">
-                  <tr>
-                    <th className="p-4 font-normal">Transaction ID</th>
-                    <th className="p-4 font-normal">Amount</th>
-                    <th className="p-4 font-normal">Risk Score</th>
-                    <th className="p-4 font-normal">Status</th>
-                    <th className="p-4 font-normal text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  {transactions.map((tx) => (
-                    <tr key={tx.id} onClick={() => setSelectedTx(tx)} className="border-b border-border/50 hover:bg-white/5 cursor-pointer transition-colors">
-                      <td className="p-4 font-mono text-xs">{tx.id}</td>
-                      <td className="p-4 font-medium">${tx.amount.toFixed(2)}</td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${tx.risk_score > 70 ? 'bg-danger' : tx.risk_score > 40 ? 'bg-warning' : 'bg-primary'}`}
-                              style={{ width: `${tx.risk_score}%` }}
-                            />
-                          </div>
-                          <span>{tx.risk_score}%</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        {tx.is_fraud ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-danger/10 text-danger text-xs font-bold border border-danger/20">
-                            <ShieldAlert size={12} /> FRAUD
-                          </span>
-                        ) : tx.is_suspicious ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-xs font-bold border border-warning/20">
-                            <AlertTriangle size={12} /> SUSPICIOUS
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
-                            <ShieldCheck size={12} /> SAFE
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <button className="text-muted hover:text-white transition-colors">
-                          <Info size={16} />
-                        </button>
-                      </td>
+              {transactions.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <p>No transactions yet</p>
+                    <p className="text-xs mt-2">Click "Start" to begin simulation</p>
+                  </div>
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead className={`sticky top-0 ${darkMode ? 'bg-slate-800' : 'bg-gray-100'} text-xs text-gray-500 font-semibold`}>
+                    <tr>
+                      <th className="p-4">ID</th>
+                      <th className="p-4">Time</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4">Risk</th>
+                      <th className="p-4">XGB</th>
+                      <th className="p-4">IF</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 text-right">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {transactions.map((tx) => (
+                      <tr
+                        key={tx.id}
+                        onClick={() => setSelectedTx(tx)}
+                        className={`border-t ${darkMode ? 'border-slate-800 hover:bg-slate-800/50' : 'border-gray-200 hover:bg-gray-50'} cursor-pointer transition-colors`}
+                      >
+                        <td className="p-4 font-mono text-xs">{tx.id.substring(0, 10)}</td>
+                        <td className="p-4 text-xs text-gray-500">{new Date(tx.timestamp).toLocaleTimeString()}</td>
+                        <td className="p-4 font-semibold">${tx.amount.toFixed(2)}</td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-12 h-1.5 rounded overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-gray-300'}`}>
+                              <div
+                                className={`h-full ${
+                                  tx.risk_score > 0.7 ? 'bg-red-500' : tx.risk_score > 0.4 ? 'bg-yellow-500' : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${tx.risk_score * 100}%` }}
+                              />
+                            </div>
+                            <span className="w-8 text-right text-xs">{(tx.risk_score * 100).toFixed(0)}%</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-xs">{(tx.xgboost_score * 100).toFixed(0)}%</td>
+                        <td className="p-4 text-xs">{(tx.isolation_forest_score * 100).toFixed(0)}%</td>
+                        <td className="p-4">
+                          {tx.is_fraud ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-semibold border border-red-500/30">
+                              <ShieldAlert size={12} /> FRAUD
+                            </span>
+                          ) : tx.risk_level === 'high' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-xs font-semibold border border-yellow-500/30">
+                              <AlertTriangle size={12} /> SUSPICIOUS
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
+                              <ShieldCheck size={12} /> SAFE
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button className={`${darkMode ? 'text-gray-500 hover:text-white' : 'text-gray-400 hover:text-slate-900'} transition-colors`}>
+                            <Info size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Selected Transaction Details / SHAP */}
+        {/* Transaction Details Sidebar */}
         {selectedTx && (
-          <aside className="w-96 border-l border-border bg-card p-6 flex flex-col gap-6 overflow-y-auto">
+          <aside className={`w-96 border-l ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} p-6 flex flex-col gap-6 overflow-y-auto`}>
             <div className="flex justify-between items-start">
-              <h2 className="text-lg font-bold">Risk Analysis</h2>
-              <button onClick={() => setSelectedTx(null)} className="text-muted hover:text-white">✕</button>
+              <div>
+                <h2 className="text-lg font-bold">Transaction Details</h2>
+                <p className="text-xs text-gray-500 mt-1">{selectedTx.id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedTx(null)}
+                className={`p-1 rounded hover:${darkMode ? 'bg-slate-800' : 'bg-gray-200'}`}
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="p-4 bg-background rounded-2xl border border-border">
-              <div className="text-xs text-muted mb-1">Transaction ID</div>
-              <div className="font-mono text-sm mb-4">{selectedTx.id}</div>
-
-              <div className="flex gap-4 mb-4">
-                <div className="flex-1 p-3 bg-white/5 rounded-xl">
-                  <div className="text-[10px] text-muted uppercase">Amount</div>
-                  <div className="text-lg font-bold">${selectedTx.amount.toFixed(2)}</div>
+            <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-100 border-gray-300'}`}>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Amount</div>
+                  <div className="text-xl font-bold">${selectedTx.amount.toFixed(2)}</div>
                 </div>
-                <div className="flex-1 p-3 bg-white/5 rounded-xl">
-                  <div className="text-[10px] text-muted uppercase">Risk</div>
-                  <div className="text-lg font-bold text-primary">{selectedTx.risk_score}%</div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Risk Score</div>
+                  <div className={`text-xl font-bold ${selectedTx.risk_score > 0.7 ? 'text-red-400' : selectedTx.risk_score > 0.4 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                    {(selectedTx.risk_score * 100).toFixed(1)}%
+                  </div>
                 </div>
-              </div>
-
-              <div className="text-xs leading-relaxed text-muted">
-                {selectedTx.is_fraud
-                  ? "Alert: Model detected strong markers of fraudulent behavior corresponding to standard PCA feature anomalies."
-                  : "Transaction conforms to typical user behavior patterns."}
               </div>
             </div>
 
             <div>
-              <h3 className="text-xs uppercase font-bold text-muted mb-4 tracking-widest flex items-center justify-between">
-                SHAP Explanations <span className="text-[10px] font-normal italic">Why this score?</span>
-              </h3>
-              <div className="space-y-2">
-                {selectedTx.feature_names.slice(0, 10).map((name, idx) => {
-                  const val = selectedTx.shap_values[idx];
-                  const absVal = Math.abs(val);
-                  return (
-                    <div key={name} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span>{name}</span>
-                        <span className={val > 0 ? 'text-danger' : 'text-primary'}>
-                          {val > 0 ? '+' : ''}{val.toFixed(3)}
-                        </span>
-                      </div>
-                      <div className="h-2 bg-background rounded-full overflow-hidden flex">
-                        <div className="flex-1 flex justify-end">
-                          {val < 0 && <div className="h-full bg-primary/40" style={{ width: `${Math.min(absVal * 100, 100)}%` }} />}
-                        </div>
-                        <div className="flex-1">
-                          {val > 0 && <div className="h-full bg-danger/40" style={{ width: `${Math.min(absVal * 100, 100)}%` }} />}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <h3 className="text-xs uppercase font-bold text-gray-500 mb-3">Model Scores</h3>
+              <div className="space-y-3">
+                <ScoreBar label="XGBoost" value={selectedTx.xgboost_score} darkMode={darkMode} />
+                <ScoreBar label="Isolation Forest" value={selectedTx.isolation_forest_score} darkMode={darkMode} />
+                <ScoreBar label="Rule-Based" value={selectedTx.rule_based_score} darkMode={darkMode} />
               </div>
             </div>
 
-            <div className="mt-auto pt-6 border-t border-border">
-              <div className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-xl">
-                <ShieldCheck size={16} className="text-primary" />
-                <div className="text-[11px] leading-tight font-medium text-primary">
-                  Responsible AI Guardrails active. Explanation generated via TreeSHAP kernels.
+            <div>
+              <h3 className="text-xs uppercase font-bold text-gray-500 mb-3">Prediction</h3>
+              <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-100 border-gray-300'}`}>
+                {selectedTx.is_fraud ? (
+                  <div>
+                    <div className="flex items-center gap-2 text-red-400 font-semibold mb-2">
+                      <ShieldAlert size={16} /> FRAUD DETECTED
+                    </div>
+                    <p className="text-xs text-gray-500">This transaction exhibits strong markers of fraudulent behavior based on ensemble model consensus.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-2">
+                      <ShieldCheck size={16} /> LEGITIMATE
+                    </div>
+                    <p className="text-xs text-gray-500">This transaction aligns with typical customer behavior patterns.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`p-3 rounded-lg border ${darkMode ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'} text-xs text-gray-500`}>
+              <div className="flex items-start gap-2">
+                <ShieldCheck size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-semibold text-emerald-400 mb-1">Explainable AI</div>
+                  <p>Predictions powered by ensemble of XGBoost, Isolation Forest, and rule-based detection with TreeSHAP explanations.</p>
                 </div>
               </div>
             </div>
@@ -311,11 +518,33 @@ export default function App() {
   );
 }
 
-function MetricItem({ label, value, color }: { label: string, value: string, color: string }) {
+function StatItem({ label, value, darkMode, color = 'text-emerald-400' }: {
+  label: string;
+  value: string;
+  darkMode: boolean;
+  color?: string;
+}) {
   return (
-    <div className="flex flex-col gap-1">
-      <div className="text-xs text-muted">{label}</div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+    <div className={`p-3 rounded-lg border ${darkMode ? 'bg-slate-800/30 border-slate-700' : 'bg-gray-100 border-gray-300'}`}>
+      <div className="text-xs text-gray-500 mb-1">{label}</div>
+      <div className={`text-lg font-bold ${color}`}>{value}</div>
+    </div>
+  );
+}
+
+function ScoreBar({ label, value, darkMode }: { label: string; value: number; darkMode: boolean }) {
+  return (
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-500">{label}</span>
+        <span className="font-semibold">{(value * 100).toFixed(1)}%</span>
+      </div>
+      <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-gray-300'}`}>
+        <div
+          className={`h-full ${value > 0.7 ? 'bg-red-500' : value > 0.4 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+          style={{ width: `${value * 100}%` }}
+        />
+      </div>
     </div>
   );
 }
