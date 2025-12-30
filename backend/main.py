@@ -297,6 +297,12 @@ def get_demo_data(limit: int = 50) -> List[Dict]:
     if sim_state.dataset_loader is None:
         raise HTTPException(status_code=503, detail="Dataset not loaded")
     
+    # Helper to sanitize float values
+    def safe_float(val, default=0.0):
+        if val is None or np.isnan(val) or np.isinf(val):
+            return default
+        return float(val)
+    
     try:
         # Sample fraud transactions
         demo_df = sim_state.dataset_loader.get_sample_transactions(n=limit, fraud_ratio=0.3)
@@ -307,19 +313,22 @@ def get_demo_data(limit: int = 50) -> List[Dict]:
         
         for idx, row in demo_df.iterrows():
             features = row[feature_names].values.tolist()
+            # Sanitize features
+            features = [safe_float(f) for f in features]
+            
             # Get prediction
             X = np.array(features).reshape(1, -1)
             if_pred, if_score = sim_state.models.predict_isolation_forest(X)
             xgb_pred, xgb_score = sim_state.models.predict_xgboost(X)
             
-            risk_score = xgb_score[0] * 0.5 + if_score[0] * 0.3
+            risk_score = safe_float(xgb_score[0], 0.5) * 0.5 + safe_float(if_score[0], 0.5) * 0.3
             
             demo_data.append({
                 'id': f"DEMO-{idx}",
                 'features': features,
-                'risk_score': float(risk_score),
+                'risk_score': safe_float(risk_score, 0.5),
                 'is_fraud': bool(risk_score > 0.5),
-                'amount': float(features[0]) if features else 0,
+                'amount': safe_float(features[0], 100.0) if features else 0,
                 'timestamp': (datetime.now() - timedelta(hours=idx)).isoformat()
             })
         
@@ -398,18 +407,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     risk_level = "low"
                 
-                # Prepare payload
+                # Helper to sanitize float values (handle NaN/Inf)
+                def safe_float(val, default=0.0):
+                    if val is None or np.isnan(val) or np.isinf(val):
+                        return default
+                    return float(val)
+                
+                # Prepare payload with sanitized values
                 payload = {
                     "id": f"TXN-{transaction_count}",
                     "timestamp": datetime.now().isoformat(),
-                    "amount": float(features[0]),
-                    "features": features.tolist(),
-                    "risk_score": float(ensemble_score),
+                    "amount": safe_float(features[0], 100.0),
+                    "features": [safe_float(f) for f in features.tolist()],
+                    "risk_score": safe_float(ensemble_score, 0.5),
                     "risk_level": risk_level,
                     "is_fraud": bool(is_fraud_pred),
-                    "xgboost_score": float(xgb_score[0]),
-                    "isolation_forest_score": float(if_score[0]),
-                    "rule_based_score": float(rule_score),
+                    "xgboost_score": safe_float(xgb_score[0], 0.5),
+                    "isolation_forest_score": safe_float(if_score[0], 0.5),
+                    "rule_based_score": safe_float(rule_score, 0.5),
                     "ground_truth": bool(tx_row['Class'] == 1),
                     "feature_count": len(feature_names),
                     "stats": {
