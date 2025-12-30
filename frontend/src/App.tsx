@@ -19,6 +19,7 @@ import {
   TransactionDetail,
   MetricsDashboard,
   OnboardingCard,
+  Instructions,
 } from './components/dashboard';
 import { useSimulator } from './hooks/useSimulator';
 import { useTheme } from './hooks/useTheme';
@@ -135,7 +136,7 @@ export default function App() {
   // Local state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'feed'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'feed' | 'instructions'>('dashboard');
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
     riskLevel: 'all',
@@ -227,29 +228,40 @@ export default function App() {
 
         {/* Main Area */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {/* View Toggle (Mobile) */}
-          <div className="lg:hidden flex items-center gap-2 p-4 border-b border-slate-800">
+          {/* View Toggle - Tab Navigation */}
+          <div className="flex items-center gap-2 p-4 border-b border-slate-800">
             <button
               onClick={() => setActiveView('dashboard')}
               className={cn(
-                'flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors',
+                'py-2 px-4 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'dashboard'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-400'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
               )}
             >
-              Dashboard
+              📊 Dashboard
             </button>
             <button
               onClick={() => setActiveView('feed')}
               className={cn(
-                'flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors',
+                'py-2 px-4 rounded-lg text-sm font-medium transition-colors',
                 activeView === 'feed'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-400'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
               )}
             >
-              Transactions
+              💳 Transactions
+            </button>
+            <button
+              onClick={() => setActiveView('instructions')}
+              className={cn(
+                'py-2 px-4 rounded-lg text-sm font-medium transition-colors',
+                activeView === 'instructions'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              )}
+            >
+              📖 Instructions
             </button>
           </div>
 
@@ -275,43 +287,52 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            {/* Desktop Layout */}
-            <div className="hidden lg:grid lg:grid-cols-5 gap-6 h-full">
-              {/* Metrics Dashboard - 3 columns */}
-              <div className="col-span-3 overflow-y-auto pr-2">
-                <MetricsDashboard transactions={filteredTransactions} stats={stats} />
+            {/* Instructions View */}
+            {activeView === 'instructions' ? (
+              <div className="overflow-y-auto h-full">
+                <Instructions />
               </div>
+            ) : (
+              <>
+                {/* Desktop Layout */}
+                <div className="hidden lg:grid lg:grid-cols-5 gap-6 h-full">
+                  {/* Metrics Dashboard - 3 columns */}
+                  <div className="col-span-3 overflow-y-auto pr-2">
+                    <MetricsDashboard transactions={filteredTransactions} stats={stats} />
+                  </div>
 
-              {/* Transaction Feed - 2 columns */}
-              <div className="col-span-2 h-full">
-                <TransactionFeed
-                  transactions={filteredTransactions}
-                  searchQuery={filters.searchQuery}
-                  onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
-                  onSelectTransaction={handleSelectTransaction}
-                  selectedTransactionId={selectedTransaction?.id}
-                  className="h-full"
-                />
-              </div>
-            </div>
-
-            {/* Mobile Layout */}
-            <div className="lg:hidden h-full">
-              {activeView === 'dashboard' ? (
-                <div className="overflow-y-auto h-full">
-                  <MetricsDashboard transactions={filteredTransactions} stats={stats} />
+                  {/* Transaction Feed - 2 columns */}
+                  <div className="col-span-2 h-full">
+                    <TransactionFeed
+                      transactions={filteredTransactions}
+                      searchQuery={filters.searchQuery}
+                      onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
+                      onSelectTransaction={handleSelectTransaction}
+                      selectedTransactionId={selectedTransaction?.id}
+                      className="h-full"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <TransactionFeed
-                  transactions={filteredTransactions}
-                  searchQuery={filters.searchQuery}
-                  onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
-                  onSelectTransaction={handleSelectTransaction}
-                  selectedTransactionId={selectedTransaction?.id}
-                  className="h-full"
-                />
-              )}
-            </div>
+
+                {/* Mobile Layout */}
+                <div className="lg:hidden h-full">
+                  {activeView === 'dashboard' ? (
+                    <div className="overflow-y-auto h-full">
+                      <MetricsDashboard transactions={filteredTransactions} stats={stats} />
+                    </div>
+                  ) : (
+                    <TransactionFeed
+                      transactions={filteredTransactions}
+                      searchQuery={filters.searchQuery}
+                      onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
+                      onSelectTransaction={handleSelectTransaction}
+                      selectedTransactionId={selectedTransaction?.id}
+                      className="h-full"
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </main>
 
