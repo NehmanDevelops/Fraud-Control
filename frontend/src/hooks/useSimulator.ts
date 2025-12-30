@@ -63,6 +63,8 @@ export function useSimulator(): UseSimulatorReturn {
     try {
       const response = await axios.get(`${API_BASE}/status`);
       setStats(response.data);
+      // sync running state with backend
+      setIsRunning(response.data.is_running);
       setLoading(false);
       setError(null);
     } catch (err) {
@@ -263,18 +265,20 @@ export function useSimulator(): UseSimulatorReturn {
     }
   }, []);
 
-  // Initial status fetch and polling
+  // Initial status fetch and WebSocket connection
   useEffect(() => {
     fetchStatus();
+    // always try to connect websocket on mount
+    connectWebSocket();
     const interval = setInterval(fetchStatus, 5000);
     
     return () => {
       clearInterval(interval);
       disconnectWebSocket();
     };
-  }, [fetchStatus, disconnectWebSocket]);
+  }, [fetchStatus, disconnectWebSocket, connectWebSocket]);
 
-  // Connect WebSocket when running state changes
+  // Reconnect WebSocket if disconnected while running
   useEffect(() => {
     if (isRunning && connectionStatus === 'disconnected') {
       connectWebSocket();
