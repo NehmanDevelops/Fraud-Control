@@ -280,6 +280,16 @@ def stop_simulator() -> Dict:
     return {"message": "Simulator stopped"}
 
 
+@app.post("/control/reset")
+def reset_simulator() -> Dict:
+    """Reset simulator counters and transactions."""
+    sim_state.transactions_processed = 0
+    sim_state.fraud_count = 0
+    sim_state.is_running = False
+    logger.info("Simulator reset")
+    return {"message": "Simulator reset", "transactions_processed": 0, "fraud_count": 0}
+
+
 @app.post("/control/config")
 def configure_simulator(config: SimulatorConfig) -> Dict:
     """Configure simulator parameters."""
