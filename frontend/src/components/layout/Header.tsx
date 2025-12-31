@@ -19,6 +19,7 @@ import {
   Activity,
   RotateCcw,
   X,
+  Trash2,
 } from 'lucide-react';
 import { Button, IconButton, StatusDot } from '../ui';
 import { cn } from '../../lib/utils';
@@ -33,6 +34,7 @@ interface HeaderProps {
   onLoadDemo: () => void;
   onToggleTheme: () => void;
   onReset: () => void;
+  onClear: () => void;
   className?: string;
 }
 
@@ -46,6 +48,7 @@ export function Header({
   onLoadDemo,
   onToggleTheme,
   onReset,
+  onClear,
   className,
 }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -184,8 +187,20 @@ export function Header({
               size="sm"
               leftIcon={<RotateCcw size={16} />}
               onClick={onReset}
+              title="Reset simulator counters"
             >
               <span className="hidden sm:inline">Reset</span>
+            </Button>
+
+            {/* Clear Feed Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Trash2 size={16} />}
+              onClick={onClear}
+              title="Clear transaction feed"
+            >
+              <span className="hidden sm:inline">Clear</span>
             </Button>
 
             {/* Demo Data Button */}

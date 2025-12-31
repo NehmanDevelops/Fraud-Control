@@ -201,7 +201,7 @@ export default function App() {
   }
 
   return (
-    <div className={cn('flex flex-col h-screen bg-slate-950 text-white', isDark && 'dark')}>
+    <div className={cn('flex flex-col h-screen text-white', isDark ? 'bg-slate-950' : 'bg-white light text-slate-900')}>
       {/* Header */}
       <Header
         isRunning={isRunning}
@@ -213,6 +213,7 @@ export default function App() {
         onLoadDemo={handleLoadDemo}
         onToggleTheme={toggleTheme}
         onReset={resetSimulator}
+        onClear={clearTransactions}
       />
 
       {/* Main Content */}

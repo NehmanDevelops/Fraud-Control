@@ -29,6 +29,16 @@
   color-scheme: dark;
 }
 
+/* Light mode variables */
+.light {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-light: #cbd5e1;
+  color-scheme: light;
+}
+
 /* ============================================
    Base Styles
    ============================================ */
@@ -47,6 +57,41 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+
+/* Light mode body */
+.light body,
+body.light {
+  @apply bg-white text-slate-900;
+}
+
+.light .bg-slate-950 {
+  @apply bg-white;
+}
+
+.light .bg-slate-900 {
+  @apply bg-slate-100;
+}
+
+.light .bg-slate-800 {
+  @apply bg-slate-200;
+}
+
+.light .text-white {
+  @apply text-slate-900;
+}
+
+.light .text-slate-400,
+.light .text-slate-500 {
+  @apply text-slate-600;
+}
+
+.light .border-slate-800 {
+  @apply border-slate-200;
+}
+
+.light .border-slate-700 {
+  @apply border-slate-300;
 }
 
 /* ============================================
