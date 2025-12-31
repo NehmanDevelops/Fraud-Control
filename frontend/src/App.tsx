@@ -310,6 +310,8 @@ export default function App() {
                       transactions={filteredTransactions}
                       searchQuery={filters.searchQuery}
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
+                      speed={stats.speed}
+                      onSpeedChange={updateSpeed}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
                       className="h-full"
@@ -328,6 +330,8 @@ export default function App() {
                       transactions={filteredTransactions}
                       searchQuery={filters.searchQuery}
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
+                      speed={stats.speed}
+                      onSpeedChange={updateSpeed}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
                       className="h-full"

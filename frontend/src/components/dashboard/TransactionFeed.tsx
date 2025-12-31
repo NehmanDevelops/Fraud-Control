@@ -15,7 +15,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
-import { Card, Badge, RiskIndicator, SearchInput } from '../ui';
+import { Card, Badge, RiskIndicator, SearchInput, Slider } from '../ui';
 import { cn, formatCurrency, formatTime, formatRelativeTime, truncateId } from '../../lib/utils';
 import type { Transaction } from '../../types';
 
@@ -24,6 +24,8 @@ interface TransactionFeedProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onSelectTransaction: (transaction: Transaction) => void;
+  speed: number;
+  onSpeedChange: (speed: number) => void;
   selectedTransactionId?: string;
   className?: string;
 }
@@ -33,6 +35,8 @@ export function TransactionFeed({
   searchQuery,
   onSearchChange,
   onSelectTransaction,
+  speed,
+  onSpeedChange,
   selectedTransactionId,
   className,
 }: TransactionFeedProps) {
@@ -56,10 +60,21 @@ export function TransactionFeed({
           onChange={(e) => onSearchChange(e.target.value)}
           onClear={() => onSearchChange('')}
         />
+
+        <div className="mt-3">
+          <Slider
+            label={`Stream Speed (${speed.toFixed(1)}s interval)`}
+            value={speed}
+            min={0.2}
+            max={3}
+            step={0.1}
+            onChange={onSpeedChange}
+          />
+        </div>
       </div>
 
       {/* Transaction List */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+      <div className="flex-1 overflow-y-auto max-h-[70vh] sm:max-h-none scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
         {transactions.length === 0 ? (
           <EmptyState />
         ) : (
