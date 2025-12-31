@@ -74,7 +74,7 @@ export function TransactionFeed({
       </div>
 
       {/* Transaction List */}
-      <div className="flex-1 overflow-y-auto max-h-[70vh] sm:max-h-none scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+      <div className="flex-1 overflow-y-auto max-h-[70vh] sm:max-h-[78vh] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
         {transactions.length === 0 ? (
           <EmptyState />
         ) : (
@@ -150,7 +150,7 @@ function TransactionRow({ transaction, index, isSelected, onClick }: Transaction
           </span>
           {is_fraud && (
             <Badge variant="fraud" size="sm">
-              FRAUD
+              FRAUDULENT
             </Badge>
           )}
         </div>
