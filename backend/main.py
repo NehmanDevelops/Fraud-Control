@@ -482,6 +482,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 sim_state.transactions_processed += 1
                 if is_fraud_pred or actual_ground_truth:
                     sim_state.fraud_count += 1
+                    # Pause the simulator to let recruiters review the fraud
+                    sim_state.is_running = False
                 
                 # Determine risk color
                 if ensemble_score > 0.7:
