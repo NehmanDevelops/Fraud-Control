@@ -130,6 +130,7 @@ export default function App() {
     injectFraud,
     loadDemoData,
     clearTransactions,
+    showFraudOnly,
     resetSimulator,
     fetchExplanation,
   } = useSimulator();
@@ -225,6 +226,7 @@ export default function App() {
           filters={filters}
           onSpeedChange={updateSpeed}
           onFilterChange={handleFilterChange}
+          onFraudOnly={showFraudOnly}
           onClearTransactions={clearTransactions}
           className="hidden lg:flex"
         />

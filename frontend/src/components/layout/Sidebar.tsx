@@ -26,6 +26,7 @@ interface SidebarProps {
   filters: FilterState;
   onSpeedChange: (speed: number) => void;
   onFilterChange: (filters: Partial<FilterState>) => void;
+  onFraudOnly: () => void;
   onClearTransactions: () => void;
   className?: string;
 }
@@ -36,6 +37,7 @@ export function Sidebar({
   filters,
   onSpeedChange,
   onFilterChange,
+  onFraudOnly,
   onClearTransactions,
   className,
 }: SidebarProps) {
@@ -93,7 +95,12 @@ export function Sidebar({
             <Toggle
               label="Show Fraud Only"
               checked={filters.fraudOnly}
-              onChange={(checked) => onFilterChange({ fraudOnly: checked })}
+              onChange={(checked) => {
+                onFilterChange({ fraudOnly: checked });
+                if (checked) {
+                  onFraudOnly();
+                }
+              }}
             />
             
             <div className="pt-4 border-t border-slate-800">

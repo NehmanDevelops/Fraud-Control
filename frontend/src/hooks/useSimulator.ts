@@ -28,13 +28,14 @@ interface UseSimulatorReturn {
   injectFraud: () => Promise<void>;
   loadDemoData: () => Promise<void>;
   clearTransactions: () => void;
+  showFraudOnly: () => void;
   resetSimulator: () => Promise<void>;
   fetchExplanation: (features: number[]) => Promise<ShapExplanation | null>;
 }
 
 const defaultStats: AppStats = {
   is_running: false,
-  speed: 1,
+  speed: 1.5,
   fraud_rate: 0.01,
   transactions_processed: 0,
   fraud_count: 0,
@@ -212,10 +213,21 @@ export function useSimulator(): UseSimulatorReturn {
         transactions_processed: fraudTransaction.stats?.total_processed || prev.transactions_processed + 1,
         fraud_count: fraudTransaction.stats?.total_fraud || prev.fraud_count + 1,
       }));
+
+      // Pause the stream so the fraud stays visible
+      setIsRunning(false);
+      disconnectWebSocket();
     } catch (err) {
       console.error('Failed to inject fraud:', err);
       setError('Failed to inject fraud');
     }
+  }, [disconnectWebSocket]);
+
+  /**
+   * Filter current feed to fraud-only (used when toggling Show Fraud Only)
+   */
+  const showFraudOnly = useCallback(() => {
+    setTransactions((prev) => prev.filter((tx) => tx.is_fraud));
   }, []);
 
   /**
@@ -322,6 +334,7 @@ export function useSimulator(): UseSimulatorReturn {
     injectFraud,
     loadDemoData,
     clearTransactions,
+    showFraudOnly,
     resetSimulator,
     fetchExplanation,
   };
