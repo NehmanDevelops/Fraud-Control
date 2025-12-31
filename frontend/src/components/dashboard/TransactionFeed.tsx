@@ -59,7 +59,7 @@ export function TransactionFeed({
       </div>
 
       {/* Transaction List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
         {transactions.length === 0 ? (
           <EmptyState />
         ) : (
