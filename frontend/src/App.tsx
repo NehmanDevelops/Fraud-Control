@@ -314,9 +314,10 @@ export default function App() {
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
                       speed={stats.speed}
                       onSpeedChange={updateSpeed}
-                      onShowFraudOnly={showFraudOnly}
+                      onShowFraudOnly={() => handleFilterChange({ fraudOnly: !filters.fraudOnly })}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
+                      showingFraudOnly={filters.fraudOnly}
                       className="h-full"
                     />
                   </div>
@@ -335,9 +336,10 @@ export default function App() {
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
                       speed={stats.speed}
                       onSpeedChange={updateSpeed}
-                      onShowFraudOnly={showFraudOnly}
+                      onShowFraudOnly={() => handleFilterChange({ fraudOnly: !filters.fraudOnly })}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
+                      showingFraudOnly={filters.fraudOnly}
                       className="h-full"
                     />
                   )}

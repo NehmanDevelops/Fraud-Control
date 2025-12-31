@@ -27,6 +27,7 @@ interface TransactionFeedProps {
   speed: number;
   onSpeedChange: (speed: number) => void;
   onShowFraudOnly: () => void;
+  showingFraudOnly?: boolean;
   selectedTransactionId?: string;
   className?: string;
 }
@@ -39,6 +40,7 @@ export function TransactionFeed({
   speed,
   onSpeedChange,
   onShowFraudOnly,
+  showingFraudOnly = false,
   selectedTransactionId,
   className,
 }: TransactionFeedProps) {
@@ -55,12 +57,12 @@ export function TransactionFeed({
           </div>
           <div className="flex items-center gap-3">
             <Button
-              variant="outline"
+              variant={showingFraudOnly ? "primary" : "outline"}
               size="sm"
               onClick={onShowFraudOnly}
-              className="border-slate-700 text-slate-200"
+              className={showingFraudOnly ? "bg-red-600 hover:bg-red-700 text-white" : "border-slate-700 text-slate-200"}
             >
-              Show Fraud Transactions Only
+              {showingFraudOnly ? "Show All Transactions" : "Show Fraud Only"}
             </Button>
             <LiveIndicator active={transactions.length > 0} />
           </div>
