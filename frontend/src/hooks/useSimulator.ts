@@ -35,7 +35,7 @@ interface UseSimulatorReturn {
 
 const defaultStats: AppStats = {
   is_running: false,
-  speed: 1.5,
+  speed: 3.0,
   fraud_rate: 0.01,
   transactions_processed: 0,
   fraud_count: 0,
@@ -225,9 +225,16 @@ export function useSimulator(): UseSimulatorReturn {
 
   /**
    * Filter current feed to fraud-only (used when toggling Show Fraud Only)
+   * Only shows transactions that are actually flagged as fraud (is_fraud === true)
    */
   const showFraudOnly = useCallback(() => {
-    setTransactions((prev) => prev.filter((tx) => tx.is_fraud));
+    setTransactions((prev) => {
+      const fraudOnly = prev.filter((tx) => tx.is_fraud === true);
+      if (fraudOnly.length === 0) {
+        console.log('No fraud transactions in feed to show');
+      }
+      return fraudOnly;
+    });
   }, []);
 
   /**

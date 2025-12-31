@@ -66,7 +66,7 @@ class ExplanationResponse(BaseModel):
 
 class SimulatorConfig(BaseModel):
     """Simulator configuration."""
-    speed: float = 1.0  # Seconds between transactions
+    speed: float = 3.0  # Seconds between transactions
     fraud_rate: float = 0.01  # Proportion of fraudulent transactions
     inject_fraud: bool = False
     use_demo_mode: bool = False
@@ -77,7 +77,7 @@ class SimulatorState:
     
     def __init__(self):
         self.is_running = False
-        self.speed = 1.0
+        self.speed = 3.0
         self.fraud_rate = 0.01
         self.inject_fraud = False
         self.use_demo_mode = False
