@@ -303,8 +303,11 @@ def configure_simulator(config: SimulatorConfig) -> Dict:
 
 @app.post("/inject-fraud")
 def inject_fraud_transaction() -> Dict:
-    """Immediately generate and return a fraud transaction."""
+    """Immediately generate and return a fraud transaction. Also stops simulation."""
     try:
+        # Stop the simulation so the fraud stays visible at top of feed
+        sim_state.is_running = False
+        
         if sim_state.dataset_loader is None or sim_state.models is None:
             raise HTTPException(status_code=503, detail="Models not ready")
         

@@ -196,15 +196,19 @@ export function useSimulator(): UseSimulatorReturn {
   }, [stats.fraud_rate]);
 
   /**
-   * Inject a fraudulent transaction - works even when simulation is stopped
+   * Inject a fraudulent transaction - stops simulation and shows fraud at TOP
    */
   const injectFraud = useCallback(async () => {
     try {
+      // FIRST: Stop the stream immediately so no more transactions come in
+      setIsRunning(false);
+      disconnectWebSocket();
+      
       // Call the dedicated inject-fraud endpoint that returns the transaction
       const response = await axios.post(`${API_BASE}/inject-fraud`);
       const fraudTransaction: Transaction = response.data;
       
-      // Add the fraud transaction directly to the feed
+      // Add the fraud transaction at the TOP of the feed (it will be first)
       setTransactions(prev => [fraudTransaction, ...prev].slice(0, 200));
       
       // Update local stats
@@ -213,10 +217,6 @@ export function useSimulator(): UseSimulatorReturn {
         transactions_processed: fraudTransaction.stats?.total_processed || prev.transactions_processed + 1,
         fraud_count: fraudTransaction.stats?.total_fraud || prev.fraud_count + 1,
       }));
-
-      // Pause the stream so the fraud stays visible
-      setIsRunning(false);
-      disconnectWebSocket();
     } catch (err) {
       console.error('Failed to inject fraud:', err);
       setError('Failed to inject fraud');
