@@ -418,8 +418,10 @@ function ShapFeatureRow({
   contribution: number;
   rank: number;
 }) {
-  const isPositive = contribution > 0;
-  const absContribution = Math.abs(contribution);
+  const safeValue = value ?? 0;
+  const safeContribution = contribution ?? 0;
+  const isPositive = safeContribution > 0;
+  const absContribution = Math.abs(safeContribution);
   const maxWidth = 60; // percentage
 
   return (
@@ -431,7 +433,7 @@ function ShapFeatureRow({
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm text-slate-300 truncate">{feature}</span>
           <span className="text-xs text-slate-500 font-mono flex-shrink-0 ml-2">
-            {value.toFixed(3)}
+            {safeValue.toFixed(3)}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -461,7 +463,7 @@ function ShapFeatureRow({
               'text-xs font-mono',
               isPositive ? 'text-red-400' : 'text-emerald-400'
             )}>
-              {isPositive ? '+' : ''}{contribution.toFixed(3)}
+              {isPositive ? '+' : ''}{safeContribution.toFixed(3)}
             </span>
           </div>
         </div>
