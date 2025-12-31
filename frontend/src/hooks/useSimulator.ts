@@ -195,22 +195,28 @@ export function useSimulator(): UseSimulatorReturn {
   }, [stats.fraud_rate]);
 
   /**
-   * Inject a fraudulent transaction
+   * Inject a fraudulent transaction - works even when simulation is stopped
    */
   const injectFraud = useCallback(async () => {
     try {
-      const config: SimulatorConfig = {
-        speed: stats.speed,
-        fraud_rate: stats.fraud_rate,
-        inject_fraud: true,
-        use_demo_mode: false,
-      };
-      await axios.post(`${API_BASE}/control/config`, config);
+      // Call the dedicated inject-fraud endpoint that returns the transaction
+      const response = await axios.post(`${API_BASE}/inject-fraud`);
+      const fraudTransaction: Transaction = response.data;
+      
+      // Add the fraud transaction directly to the feed
+      setTransactions(prev => [fraudTransaction, ...prev].slice(0, 200));
+      
+      // Update local stats
+      setStats(prev => ({
+        ...prev,
+        transactions_processed: fraudTransaction.stats?.total_processed || prev.transactions_processed + 1,
+        fraud_count: fraudTransaction.stats?.total_fraud || prev.fraud_count + 1,
+      }));
     } catch (err) {
       console.error('Failed to inject fraud:', err);
       setError('Failed to inject fraud');
     }
-  }, [stats.speed, stats.fraud_rate]);
+  }, []);
 
   /**
    * Load demo data for showcase

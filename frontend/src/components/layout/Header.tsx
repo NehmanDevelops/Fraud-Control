@@ -219,7 +219,6 @@ export function Header({
               size="sm"
               leftIcon={<Zap size={16} />}
               onClick={onInjectFraud}
-              disabled={!isRunning}
             >
               <span className="hidden sm:inline">Inject Fraud</span>
             </Button>
