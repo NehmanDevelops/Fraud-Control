@@ -304,58 +304,64 @@ def configure_simulator(config: SimulatorConfig) -> Dict:
 @app.post("/inject-fraud")
 def inject_fraud_transaction() -> Dict:
     """Immediately generate and return a fraud transaction."""
-    if sim_state.dataset_loader is None or sim_state.models is None:
-        raise HTTPException(status_code=503, detail="Models not ready")
-    
-    df = sim_state.dataset_loader.get_data()
-    fraud_pool = df[df['Class'] == 1]
-    feature_names = sim_state.dataset_loader.feature_columns
-    
-    # Sample a fraud transaction
-    tx_row = fraud_pool.sample(1).iloc[0]
-    features = tx_row[feature_names].values.astype(float)
-    X = features.reshape(1, -1)
-    
-    # Get predictions
-    if_pred, if_score = sim_state.models.predict_isolation_forest(X)
-    xgb_pred, xgb_score = sim_state.models.predict_xgboost(X)
-    rule_score = RuleBasedDetector.compute_rule_score(
-        amount=float(features[0]),
-        hour=np.random.randint(0, 24)
-    )
-    
-    ensemble_score = max((xgb_score[0] * 0.5 + if_score[0] * 0.3 + rule_score * 0.2), 0.85)
-    
-    # Update counters
-    sim_state.transactions_processed += 1
-    sim_state.fraud_count += 1
-    
-    def safe_float(val, default=0.0):
-        if val is None or np.isnan(val) or np.isinf(val):
-            return default
-        return float(val)
-    
-    payload = {
-        "id": f"FRAUD-{sim_state.transactions_processed}",
-        "timestamp": datetime.now().isoformat(),
-        "amount": safe_float(features[0], 500.0),
-        "features": [safe_float(f) for f in features.tolist()],
-        "risk_score": safe_float(ensemble_score, 0.85),
-        "risk_level": "high",
-        "is_fraud": True,
-        "xgboost_score": safe_float(xgb_score[0], 0.7),
-        "isolation_forest_score": safe_float(if_score[0], 0.7),
-        "rule_based_score": safe_float(rule_score, 0.5),
-        "ground_truth": True,
-        "feature_count": len(feature_names),
-        "stats": {
-            "total_processed": sim_state.transactions_processed,
-            "total_fraud": sim_state.fraud_count
+    try:
+        if sim_state.dataset_loader is None or sim_state.models is None:
+            raise HTTPException(status_code=503, detail="Models not ready")
+        
+        df = sim_state.dataset_loader.df
+        fraud_pool = df[df['Class'] == 1]
+        feature_names = sim_state.dataset_loader.feature_columns
+        
+        # Sample a fraud transaction
+        tx_row = fraud_pool.sample(1).iloc[0]
+        features = tx_row[feature_names].values.astype(float)
+        X = features.reshape(1, -1)
+        
+        # Get predictions
+        if_pred, if_score = sim_state.models.predict_isolation_forest(X)
+        xgb_pred, xgb_score = sim_state.models.predict_xgboost(X)
+        rule_score = RuleBasedDetector.compute_rule_score(
+            amount=float(features[0]),
+            hour=np.random.randint(0, 24)
+        )
+        
+        ensemble_score = max((xgb_score[0] * 0.5 + if_score[0] * 0.3 + rule_score * 0.2), 0.85)
+        
+        # Update counters
+        sim_state.transactions_processed += 1
+        sim_state.fraud_count += 1
+        
+        def safe_float(val, default=0.0):
+            if val is None or np.isnan(val) or np.isinf(val):
+                return default
+            return float(val)
+        
+        payload = {
+            "id": f"FRAUD-{sim_state.transactions_processed}",
+            "timestamp": datetime.now().isoformat(),
+            "amount": safe_float(features[0], 500.0),
+            "features": [safe_float(f) for f in features.tolist()],
+            "risk_score": safe_float(ensemble_score, 0.85),
+            "risk_level": "high",
+            "is_fraud": True,
+            "xgboost_score": safe_float(xgb_score[0], 0.7),
+            "isolation_forest_score": safe_float(if_score[0], 0.7),
+            "rule_based_score": safe_float(rule_score, 0.5),
+            "ground_truth": True,
+            "feature_count": len(feature_names),
+            "stats": {
+                "total_processed": sim_state.transactions_processed,
+                "total_fraud": sim_state.fraud_count
+            }
         }
-    }
-    
-    logger.info(f"Injected fraud transaction: {payload['id']}")
-    return payload
+        
+        logger.info(f"Injected fraud transaction: {payload['id']}")
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error injecting fraud: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/demo-data")
