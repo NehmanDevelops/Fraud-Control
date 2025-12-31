@@ -28,6 +28,7 @@ interface UseSimulatorReturn {
   injectFraud: () => Promise<void>;
   loadDemoData: () => Promise<void>;
   clearTransactions: () => void;
+  resetSimulator: () => Promise<void>;
   fetchExplanation: (features: number[]) => Promise<ShapExplanation | null>;
 }
 
@@ -253,6 +254,22 @@ export function useSimulator(): UseSimulatorReturn {
   }, []);
 
   /**
+   * Reset simulator - clear transactions and reset backend counters
+   */
+  const resetSimulator = useCallback(async () => {
+    try {
+      await axios.post(`${API_BASE}/control/reset`);
+      setTransactions([]);
+      setIsRunning(false);
+      setStats(prev => ({ ...prev, transactions_processed: 0, fraud_count: 0, is_running: false }));
+      disconnectWebSocket();
+    } catch (err) {
+      console.error('Failed to reset simulator:', err);
+      setError('Failed to reset simulator');
+    }
+  }, [disconnectWebSocket]);
+
+  /**
    * Fetch SHAP explanation for a transaction
    */
   const fetchExplanation = useCallback(async (features: number[]): Promise<ShapExplanation | null> => {
@@ -299,6 +316,7 @@ export function useSimulator(): UseSimulatorReturn {
     injectFraud,
     loadDemoData,
     clearTransactions,
+    resetSimulator,
     fetchExplanation,
   };
 }

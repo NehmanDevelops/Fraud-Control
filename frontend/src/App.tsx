@@ -130,6 +130,7 @@ export default function App() {
     injectFraud,
     loadDemoData,
     clearTransactions,
+    resetSimulator,
     fetchExplanation,
   } = useSimulator();
 
@@ -211,6 +212,7 @@ export default function App() {
         onInjectFraud={injectFraud}
         onLoadDemo={handleLoadDemo}
         onToggleTheme={toggleTheme}
+        onReset={resetSimulator}
       />
 
       {/* Main Content */}

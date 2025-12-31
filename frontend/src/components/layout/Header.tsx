@@ -4,8 +4,8 @@
  * Inspired by professional banking dashboards (RBC, Wise)
  */
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
   Play,
@@ -17,6 +17,8 @@ import {
   Settings,
   Bell,
   Activity,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import { Button, IconButton, StatusDot } from '../ui';
 import { cn } from '../../lib/utils';
@@ -30,6 +32,7 @@ interface HeaderProps {
   onInjectFraud: () => void;
   onLoadDemo: () => void;
   onToggleTheme: () => void;
+  onReset: () => void;
   className?: string;
 }
 
@@ -42,8 +45,15 @@ export function Header({
   onInjectFraud,
   onLoadDemo,
   onToggleTheme,
+  onReset,
   className,
 }: HeaderProps) {
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications] = useState([
+    { id: 1, message: 'System initialized successfully', time: '2m ago', type: 'success' },
+    { id: 2, message: 'ML models loaded and ready', time: '2m ago', type: 'info' },
+  ]);
+
   return (
     <header
       className={cn(
@@ -125,18 +135,58 @@ export function Header({
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </IconButton>
 
-            {/* Notifications - Placeholder */}
-            <IconButton
-              variant="ghost"
-              size="sm"
-              ariaLabel="View notifications"
-              className="relative"
-            >
-              <Bell size={18} />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-            </IconButton>
+            {/* Notifications */}
+            <div className="relative">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                ariaLabel="View notifications"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <Bell size={18} />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </IconButton>
+              
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50"
+                  >
+                    <div className="p-3 border-b border-slate-700 flex items-center justify-between">
+                      <span className="text-sm font-medium text-white">Notifications</span>
+                      <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {notifications.map((n) => (
+                        <div key={n.id} className="p-3 border-b border-slate-800 last:border-0 hover:bg-slate-800/50">
+                          <p className="text-sm text-slate-300">{n.message}</p>
+                          <p className="text-xs text-slate-500 mt-1">{n.time}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <div className="w-px h-8 bg-slate-800 mx-1" />
+
+            {/* Reset Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<RotateCcw size={16} />}
+              onClick={onReset}
+            >
+              <span className="hidden sm:inline">Reset</span>
+            </Button>
 
             {/* Demo Data Button */}
             <Button
