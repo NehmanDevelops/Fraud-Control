@@ -226,16 +226,20 @@ export function useSimulator(): UseSimulatorReturn {
   /**
    * Filter current feed to fraud-only (used when toggling Show Fraud Only)
    * Only shows transactions that are actually flagged as fraud (is_fraud === true)
+   * Also stops the stream so filtered view stays visible
    */
   const showFraudOnly = useCallback(() => {
+    // Stop streaming first so new transactions don't come in
+    setIsRunning(false);
+    disconnectWebSocket();
+    
+    // Filter to only fraud transactions
     setTransactions((prev) => {
       const fraudOnly = prev.filter((tx) => tx.is_fraud === true);
-      if (fraudOnly.length === 0) {
-        console.log('No fraud transactions in feed to show');
-      }
+      console.log(`Filtering to fraud only: ${fraudOnly.length} fraud out of ${prev.length} total`);
       return fraudOnly;
     });
-  }, []);
+  }, [disconnectWebSocket]);
 
   /**
    * Load demo data for showcase

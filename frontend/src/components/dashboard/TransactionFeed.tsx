@@ -90,7 +90,7 @@ export function TransactionFeed({
         {transactions.length === 0 ? (
           <EmptyState />
         ) : (
-          <AnimatePresence initial={false}>
+          <AnimatePresence mode="sync" initial={false}>
             {transactions.map((tx, index) => (
               <TransactionRow
                 key={tx.id}
