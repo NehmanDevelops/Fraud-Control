@@ -202,7 +202,7 @@ export default function App() {
   }
 
   return (
-    <div className={cn('flex flex-col h-screen text-white', isDark ? 'bg-slate-950' : 'bg-white light text-slate-900')}>
+    <div className={cn('flex flex-col min-h-screen text-white', isDark ? 'bg-slate-950' : 'bg-white light text-slate-900')}>
       {/* Header */}
       <Header
         isRunning={isRunning}
@@ -218,7 +218,7 @@ export default function App() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-auto">
         {/* Sidebar */}
         <Sidebar
           stats={stats}
@@ -232,7 +232,7 @@ export default function App() {
         />
 
         {/* Main Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-auto">
           {/* View Toggle - Tab Navigation */}
           <div className="flex items-center gap-2 p-4 border-b border-slate-800">
             <button
@@ -271,7 +271,7 @@ export default function App() {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-hidden p-6">
+          <div className="flex-1 overflow-auto p-6">
             <AnimatePresence mode="wait">
               {/* Onboarding Card */}
               {showOnboarding && transactions.length === 0 && (
