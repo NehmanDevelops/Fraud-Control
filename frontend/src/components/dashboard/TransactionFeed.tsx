@@ -15,7 +15,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
-import { Card, Badge, RiskIndicator, SearchInput, Slider } from '../ui';
+import { Card, Badge, RiskIndicator, SearchInput, Slider, Button } from '../ui';
 import { cn, formatCurrency, formatTime, formatRelativeTime, truncateId } from '../../lib/utils';
 import type { Transaction } from '../../types';
 
@@ -26,6 +26,7 @@ interface TransactionFeedProps {
   onSelectTransaction: (transaction: Transaction) => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
+  onShowFraudOnly: () => void;
   selectedTransactionId?: string;
   className?: string;
 }
@@ -37,6 +38,7 @@ export function TransactionFeed({
   onSelectTransaction,
   speed,
   onSpeedChange,
+  onShowFraudOnly,
   selectedTransactionId,
   className,
 }: TransactionFeedProps) {
@@ -44,14 +46,24 @@ export function TransactionFeed({
     <Card variant="glass" padding="none" className={cn('flex flex-col overflow-hidden', className)}>
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-800/80">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-lg font-bold text-white">Transaction Feed</h2>
             <p className="text-sm text-slate-500">
               {transactions.length} transactions • Click for details
             </p>
           </div>
-          <LiveIndicator active={transactions.length > 0} />
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onShowFraudOnly}
+              className="border-slate-700 text-slate-200"
+            >
+              Show Fraud Transactions Only
+            </Button>
+            <LiveIndicator active={transactions.length > 0} />
+          </div>
         </div>
         
         <SearchInput

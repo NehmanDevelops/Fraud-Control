@@ -314,6 +314,7 @@ export default function App() {
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
                       speed={stats.speed}
                       onSpeedChange={updateSpeed}
+                      onShowFraudOnly={showFraudOnly}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
                       className="h-full"
@@ -334,6 +335,7 @@ export default function App() {
                       onSearchChange={(query) => handleFilterChange({ searchQuery: query })}
                       speed={stats.speed}
                       onSpeedChange={updateSpeed}
+                      onShowFraudOnly={showFraudOnly}
                       onSelectTransaction={handleSelectTransaction}
                       selectedTransactionId={selectedTransaction?.id}
                       className="h-full"
