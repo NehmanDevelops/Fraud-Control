@@ -11,8 +11,8 @@ import type { Transaction, AppStats, ShapExplanation, SimulatorConfig } from '..
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/stream';
 
-// Demo mode flag - automatically enabled when no backend URL is configured in production
-const IS_DEMO_MODE = import.meta.env.PROD && !import.meta.env.VITE_API_URL;
+// Demo mode flag - enabled in production without backend URL, or can be forced via env var
+const FORCE_DEMO = import.meta.env.VITE_FORCE_DEMO === 'true';
 
 interface UseSimulatorReturn {
   // State
@@ -78,6 +78,9 @@ export function useSimulator(): UseSimulatorReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  
+  // Dynamic demo mode - activated when backend is unavailable
+  const [isDemoMode, setIsDemoMode] = useState(FORCE_DEMO || (import.meta.env.PROD && !import.meta.env.VITE_API_URL));
 
   // Demo mode interval ref
   const demoInterval = useRef<ReturnType<typeof setInterval>>();
@@ -134,7 +137,7 @@ export function useSimulator(): UseSimulatorReturn {
    */
   const fetchStatus = useCallback(async () => {
     // In demo mode, skip API calls
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       setStats(prev => ({ ...prev, models_ready: true }));
       setLoading(false);
       setError(null);
@@ -150,17 +153,21 @@ export function useSimulator(): UseSimulatorReturn {
       setError(null);
     } catch (err) {
       console.error('Status fetch error:', err);
+      // Backend unavailable - switch to demo mode automatically
+      console.log('Backend unavailable, switching to demo mode');
+      setIsDemoMode(true);
+      setStats(prev => ({ ...prev, models_ready: true }));
       setLoading(false);
-      setError(err instanceof Error ? err.message : 'Failed to connect to backend');
+      setError(null);
     }
-  }, []);
+  }, [isDemoMode]);
 
   /**
    * Connect to WebSocket for real-time transaction streaming
    */
   const connectWebSocket = useCallback(() => {
     // In demo mode, use local simulation instead
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       setConnectionStatus('connected');
       return;
     }
@@ -228,7 +235,7 @@ export function useSimulator(): UseSimulatorReturn {
    */
   const startSimulation = useCallback(async () => {
     // Demo mode: use local simulation
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       startDemoMode();
       return;
     }
@@ -241,14 +248,14 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to start simulation:', err);
       setError('Failed to start simulation');
     }
-  }, [connectWebSocket, startDemoMode]);
+  }, [connectWebSocket, startDemoMode, isDemoMode]);
 
   /**
    * Stop the fraud simulation
    */
   const stopSimulation = useCallback(async () => {
     // Demo mode: stop local simulation
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       stopDemoMode();
       return;
     }
@@ -261,7 +268,7 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to stop simulation:', err);
       setError('Failed to stop simulation');
     }
-  }, [disconnectWebSocket, stopDemoMode]);
+  }, [disconnectWebSocket, stopDemoMode, isDemoMode]);
 
   /**
    * Toggle simulation state
@@ -279,7 +286,7 @@ export function useSimulator(): UseSimulatorReturn {
    */
   const updateSpeed = useCallback(async (speed: number) => {
     // Demo mode: just update local state
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       setStats(prev => ({ ...prev, speed }));
       // Restart demo interval with new speed if running
       if (isRunning && demoInterval.current) {
@@ -301,14 +308,14 @@ export function useSimulator(): UseSimulatorReturn {
     } catch (err) {
       console.error('Failed to update speed:', err);
     }
-  }, [stats.fraud_rate, isRunning, startDemoMode, stopDemoMode]);
+  }, [stats.fraud_rate, isRunning, startDemoMode, stopDemoMode, isDemoMode]);
 
   /**
    * Inject a fraudulent transaction - stops simulation and shows fraud at TOP
    */
   const injectFraud = useCallback(async () => {
     // Demo mode: generate a fraud transaction locally
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       stopDemoMode();
       transactionCounter.current++;
       const fraudTx = generateDemoTransaction(transactionCounter.current, true);
@@ -343,7 +350,7 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to inject fraud:', err);
       setError('Failed to inject fraud');
     }
-  }, [disconnectWebSocket]);
+  }, [disconnectWebSocket, isDemoMode, stopDemoMode]);
 
   /**
    * Filter current feed to fraud-only (used when toggling Show Fraud Only)
@@ -353,7 +360,7 @@ export function useSimulator(): UseSimulatorReturn {
   const showFraudOnly = useCallback(() => {
     // Stop streaming first so new transactions don't come in
     setIsRunning(false);
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       stopDemoMode();
     } else {
       disconnectWebSocket();
@@ -365,14 +372,14 @@ export function useSimulator(): UseSimulatorReturn {
       console.log(`Filtering to fraud only: ${fraudOnly.length} fraud out of ${prev.length} total`);
       return fraudOnly;
     });
-  }, [disconnectWebSocket, stopDemoMode]);
+  }, [disconnectWebSocket, stopDemoMode, isDemoMode]);
 
   /**
    * Load demo data for showcase
    */
   const loadDemoData = useCallback(async () => {
     // Demo mode: generate demo data locally
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       const demoTransactions: Transaction[] = Array.from({ length: 100 }, (_, i) => 
         generateDemoTransaction(i + 1, i % 50 === 0) // ~2% fraud rate
       );
@@ -414,7 +421,7 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to load demo data:', err);
       setError('Failed to load demo data');
     }
-  }, []);
+  }, [isDemoMode]);
 
   /**
    * Clear all transactions
@@ -428,7 +435,7 @@ export function useSimulator(): UseSimulatorReturn {
    */
   const resetSimulator = useCallback(async () => {
     // Demo mode: reset locally
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       stopDemoMode();
       setTransactions([]);
       transactionCounter.current = 0;
@@ -446,14 +453,14 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to reset simulator:', err);
       setError('Failed to reset simulator');
     }
-  }, [disconnectWebSocket, stopDemoMode]);
+  }, [disconnectWebSocket, stopDemoMode, isDemoMode]);
 
   /**
    * Fetch SHAP explanation for a transaction
    */
   const fetchExplanation = useCallback(async (features: number[]): Promise<ShapExplanation | null> => {
     // Demo mode: return mock SHAP explanation
-    if (IS_DEMO_MODE) {
+    if (isDemoMode) {
       const topFeatures = ['V1', 'V2', 'V3', 'V4', 'V5'].map((name, i) => ({
         feature: name,
         value: features[i] || Math.random() * 2 - 1,
@@ -475,7 +482,7 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to fetch explanation:', err);
       return null;
     }
-  }, []);
+  }, [isDemoMode]);
 
   // Initial status fetch and WebSocket connection
   useEffect(() => {
@@ -484,7 +491,7 @@ export function useSimulator(): UseSimulatorReturn {
     connectWebSocket();
     
     // Only poll for status if not in demo mode
-    if (!IS_DEMO_MODE) {
+    if (!isDemoMode) {
       const interval = setInterval(fetchStatus, 5000);
       return () => {
         clearInterval(interval);
@@ -495,14 +502,14 @@ export function useSimulator(): UseSimulatorReturn {
     return () => {
       stopDemoMode();
     };
-  }, [fetchStatus, disconnectWebSocket, connectWebSocket, stopDemoMode]);
+  }, [fetchStatus, disconnectWebSocket, connectWebSocket, stopDemoMode, isDemoMode]);
 
   // Reconnect WebSocket if disconnected while running (skip in demo mode)
   useEffect(() => {
-    if (!IS_DEMO_MODE && isRunning && connectionStatus === 'disconnected') {
+    if (!isDemoMode && isRunning && connectionStatus === 'disconnected') {
       connectWebSocket();
     }
-  }, [isRunning, connectionStatus, connectWebSocket]);
+  }, [isRunning, connectionStatus, connectWebSocket, isDemoMode]);
 
   return {
     transactions,
@@ -511,7 +518,7 @@ export function useSimulator(): UseSimulatorReturn {
     loading,
     error,
     connectionStatus,
-    isDemoMode: IS_DEMO_MODE,
+    isDemoMode,
     startSimulation,
     stopSimulation,
     toggleSimulation,
