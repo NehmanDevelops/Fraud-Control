@@ -82,6 +82,10 @@ export function useSimulator(): UseSimulatorReturn {
   // Demo mode interval ref
   const demoInterval = useRef<ReturnType<typeof setInterval>>();
   const transactionCounter = useRef(0);
+  const speedRef = useRef(defaultStats.speed);
+  
+  // Keep speedRef in sync with stats.speed
+  speedRef.current = stats.speed;
 
   // WebSocket refs
   const ws = useRef<WebSocket | null>(null);
@@ -98,6 +102,9 @@ export function useSimulator(): UseSimulatorReturn {
     setConnectionStatus('connected');
     setIsRunning(true);
     
+    // Use speedRef to get current speed value without dependency issues
+    const intervalMs = Math.max(100, 1000 / speedRef.current);
+    
     demoInterval.current = setInterval(() => {
       transactionCounter.current++;
       const tx = generateDemoTransaction(transactionCounter.current);
@@ -108,8 +115,8 @@ export function useSimulator(): UseSimulatorReturn {
         transactions_processed: transactionCounter.current,
         fraud_count: tx.is_fraud ? prev.fraud_count + 1 : prev.fraud_count,
       }));
-    }, 1000 / stats.speed);
-  }, [stats.speed]);
+    }, intervalMs);
+  }, []);
 
   /**
    * Stop demo mode simulation
