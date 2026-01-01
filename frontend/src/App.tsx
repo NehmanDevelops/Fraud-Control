@@ -204,13 +204,6 @@ export default function App() {
 
   return (
     <div className={cn('min-h-screen text-white overflow-y-auto', isDark ? 'bg-slate-950' : 'bg-white light text-slate-900')}>
-      {/* Demo Mode Banner */}
-      {isDemoMode && (
-        <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white text-center py-2 text-sm font-medium">
-          🎮 Demo Mode - Running with simulated data (no backend required)
-        </div>
-      )}
-      
       {/* Header */}
       <Header
         isRunning={isRunning}
