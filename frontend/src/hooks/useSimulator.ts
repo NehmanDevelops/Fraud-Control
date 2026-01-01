@@ -447,13 +447,17 @@ export function useSimulator(): UseSimulatorReturn {
   const fetchExplanation = useCallback(async (features: number[]): Promise<ShapExplanation | null> => {
     // Demo mode: return mock SHAP explanation
     if (IS_DEMO_MODE) {
-      const featureNames = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
+      const topFeatures = ['V1', 'V2', 'V3', 'V4', 'V5'].map((name, i) => ({
+        feature: name,
+        value: features[i] || Math.random() * 2 - 1,
+        contribution: (Math.random() - 0.5) * 0.2,
+        direction: (Math.random() > 0.5 ? 'positive' : 'negative') as 'positive' | 'negative',
+      }));
       return {
-        base_value: 0.5,
-        shap_values: featureNames.map(() => (Math.random() - 0.5) * 0.2),
-        feature_names: featureNames,
-        feature_values: features.slice(0, 10),
+        transaction_id: `DEMO-${Date.now()}`,
         prediction: features.reduce((a, b) => a + b, 0) > 0 ? 0.7 : 0.3,
+        base_value: 0.5,
+        top_features: topFeatures,
       };
     }
     
