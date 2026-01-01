@@ -104,6 +104,8 @@ export function useSimulator(): UseSimulatorReturn {
     
     setConnectionStatus('connected');
     setIsRunning(true);
+    // Set stats.is_running immediately so UI reflects "Active" state
+    setStats(prev => ({ ...prev, is_running: true }));
     
     // Use speedRef to get current speed value without dependency issues
     const intervalMs = Math.max(100, 1000 / speedRef.current);
@@ -484,25 +486,35 @@ export function useSimulator(): UseSimulatorReturn {
     }
   }, [isDemoMode]);
 
-  // Initial status fetch and WebSocket connection
+  // Initial status fetch
   useEffect(() => {
     fetchStatus();
-    // always try to connect websocket on mount (or set demo mode connected)
-    connectWebSocket();
-    
-    // Only poll for status if not in demo mode
-    if (!isDemoMode) {
-      const interval = setInterval(fetchStatus, 5000);
-      return () => {
-        clearInterval(interval);
-        disconnectWebSocket();
-      };
+  }, [fetchStatus]);
+
+  // WebSocket connection management (only when not in demo mode)
+  useEffect(() => {
+    if (isDemoMode) {
+      setConnectionStatus('connected');
+      return;
     }
     
+    connectWebSocket();
+    const interval = setInterval(fetchStatus, 5000);
+    
     return () => {
-      stopDemoMode();
+      clearInterval(interval);
+      disconnectWebSocket();
     };
-  }, [fetchStatus, disconnectWebSocket, connectWebSocket, stopDemoMode, isDemoMode]);
+  }, [isDemoMode, connectWebSocket, disconnectWebSocket, fetchStatus]);
+
+  // Cleanup demo mode only on unmount
+  useEffect(() => {
+    return () => {
+      if (demoInterval.current) {
+        clearInterval(demoInterval.current);
+      }
+    };
+  }, []);
 
   // Reconnect WebSocket if disconnected while running (skip in demo mode)
   useEffect(() => {
