@@ -7,9 +7,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import type { Transaction, AppStats, ShapExplanation, SimulatorConfig } from '../types';
 
-// API configuration
-const API_BASE = 'http://localhost:8000';
-const WS_BASE = 'ws://localhost:8000/ws/stream';
+// API configuration - use environment variables with fallback to localhost for development
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/stream';
+
+// Demo mode flag - automatically enabled when no backend URL is configured in production
+const IS_DEMO_MODE = import.meta.env.PROD && !import.meta.env.VITE_API_URL;
 
 interface UseSimulatorReturn {
   // State
@@ -19,6 +22,7 @@ interface UseSimulatorReturn {
   loading: boolean;
   error: string | null;
   connectionStatus: 'connected' | 'disconnected' | 'connecting';
+  isDemoMode: boolean;
   
   // Actions
   startSimulation: () => Promise<void>;
@@ -39,9 +43,32 @@ const defaultStats: AppStats = {
   fraud_rate: 0.01,
   transactions_processed: 0,
   fraud_count: 0,
-  models_ready: false,
+  models_ready: true,
   dataset_stats: null,
 };
+
+// Generate a demo transaction for offline mode
+function generateDemoTransaction(id: number, forceFraud = false): Transaction {
+  const isFraud = forceFraud || Math.random() < 0.02;
+  const riskScore = isFraud ? 0.7 + Math.random() * 0.3 : Math.random() * 0.4;
+  const amount = isFraud ? 500 + Math.random() * 4500 : 10 + Math.random() * 500;
+  
+  return {
+    id: `DEMO-${id}-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    amount: Math.round(amount * 100) / 100,
+    risk_score: Math.round(riskScore * 1000) / 1000,
+    risk_level: riskScore > 0.7 ? 'high' : riskScore > 0.4 ? 'medium' : 'low',
+    is_fraud: isFraud,
+    ground_truth: isFraud,
+    xgboost_score: riskScore * (0.7 + Math.random() * 0.3),
+    isolation_forest_score: riskScore * (0.5 + Math.random() * 0.5),
+    rule_based_score: riskScore * (0.3 + Math.random() * 0.4),
+    features: Array.from({ length: 30 }, () => Math.random() * 2 - 1),
+    feature_count: 30,
+    stats: { total_processed: id, total_fraud: Math.floor(id * 0.02) },
+  };
+}
 
 export function useSimulator(): UseSimulatorReturn {
   // Core state
@@ -52,6 +79,10 @@ export function useSimulator(): UseSimulatorReturn {
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
 
+  // Demo mode interval ref
+  const demoInterval = useRef<ReturnType<typeof setInterval>>();
+  const transactionCounter = useRef(0);
+
   // WebSocket refs
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout>>();
@@ -59,9 +90,50 @@ export function useSimulator(): UseSimulatorReturn {
   const maxReconnectAttempts = 5;
 
   /**
+   * Start demo mode simulation (generates fake transactions locally)
+   */
+  const startDemoMode = useCallback(() => {
+    if (demoInterval.current) return;
+    
+    setConnectionStatus('connected');
+    setIsRunning(true);
+    
+    demoInterval.current = setInterval(() => {
+      transactionCounter.current++;
+      const tx = generateDemoTransaction(transactionCounter.current);
+      setTransactions(prev => [tx, ...prev].slice(0, 200));
+      setStats(prev => ({
+        ...prev,
+        is_running: true,
+        transactions_processed: transactionCounter.current,
+        fraud_count: tx.is_fraud ? prev.fraud_count + 1 : prev.fraud_count,
+      }));
+    }, 1000 / stats.speed);
+  }, [stats.speed]);
+
+  /**
+   * Stop demo mode simulation
+   */
+  const stopDemoMode = useCallback(() => {
+    if (demoInterval.current) {
+      clearInterval(demoInterval.current);
+      demoInterval.current = undefined;
+    }
+    setIsRunning(false);
+  }, []);
+
+  /**
    * Fetch current simulator status from API
    */
   const fetchStatus = useCallback(async () => {
+    // In demo mode, skip API calls
+    if (IS_DEMO_MODE) {
+      setStats(prev => ({ ...prev, models_ready: true }));
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    
     try {
       const response = await axios.get(`${API_BASE}/status`);
       setStats(response.data);
@@ -80,6 +152,12 @@ export function useSimulator(): UseSimulatorReturn {
    * Connect to WebSocket for real-time transaction streaming
    */
   const connectWebSocket = useCallback(() => {
+    // In demo mode, use local simulation instead
+    if (IS_DEMO_MODE) {
+      setConnectionStatus('connected');
+      return;
+    }
+    
     if (ws.current?.readyState === WebSocket.OPEN) return;
 
     try {
@@ -142,6 +220,12 @@ export function useSimulator(): UseSimulatorReturn {
    * Start the fraud simulation
    */
   const startSimulation = useCallback(async () => {
+    // Demo mode: use local simulation
+    if (IS_DEMO_MODE) {
+      startDemoMode();
+      return;
+    }
+    
     try {
       await axios.post(`${API_BASE}/control/start`);
       setIsRunning(true);
@@ -150,12 +234,18 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to start simulation:', err);
       setError('Failed to start simulation');
     }
-  }, [connectWebSocket]);
+  }, [connectWebSocket, startDemoMode]);
 
   /**
    * Stop the fraud simulation
    */
   const stopSimulation = useCallback(async () => {
+    // Demo mode: stop local simulation
+    if (IS_DEMO_MODE) {
+      stopDemoMode();
+      return;
+    }
+    
     try {
       await axios.post(`${API_BASE}/control/stop`);
       setIsRunning(false);
@@ -164,7 +254,7 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to stop simulation:', err);
       setError('Failed to stop simulation');
     }
-  }, [disconnectWebSocket]);
+  }, [disconnectWebSocket, stopDemoMode]);
 
   /**
    * Toggle simulation state
@@ -181,6 +271,17 @@ export function useSimulator(): UseSimulatorReturn {
    * Update transaction streaming speed
    */
   const updateSpeed = useCallback(async (speed: number) => {
+    // Demo mode: just update local state
+    if (IS_DEMO_MODE) {
+      setStats(prev => ({ ...prev, speed }));
+      // Restart demo interval with new speed if running
+      if (isRunning && demoInterval.current) {
+        stopDemoMode();
+        setTimeout(() => startDemoMode(), 50);
+      }
+      return;
+    }
+    
     try {
       const config: SimulatorConfig = {
         speed,
@@ -193,12 +294,26 @@ export function useSimulator(): UseSimulatorReturn {
     } catch (err) {
       console.error('Failed to update speed:', err);
     }
-  }, [stats.fraud_rate]);
+  }, [stats.fraud_rate, isRunning, startDemoMode, stopDemoMode]);
 
   /**
    * Inject a fraudulent transaction - stops simulation and shows fraud at TOP
    */
   const injectFraud = useCallback(async () => {
+    // Demo mode: generate a fraud transaction locally
+    if (IS_DEMO_MODE) {
+      stopDemoMode();
+      transactionCounter.current++;
+      const fraudTx = generateDemoTransaction(transactionCounter.current, true);
+      setTransactions(prev => [fraudTx, ...prev].slice(0, 200));
+      setStats(prev => ({
+        ...prev,
+        transactions_processed: transactionCounter.current,
+        fraud_count: prev.fraud_count + 1,
+      }));
+      return;
+    }
+    
     try {
       // FIRST: Stop the stream immediately so no more transactions come in
       setIsRunning(false);
@@ -231,7 +346,11 @@ export function useSimulator(): UseSimulatorReturn {
   const showFraudOnly = useCallback(() => {
     // Stop streaming first so new transactions don't come in
     setIsRunning(false);
-    disconnectWebSocket();
+    if (IS_DEMO_MODE) {
+      stopDemoMode();
+    } else {
+      disconnectWebSocket();
+    }
     
     // Filter to only fraud transactions
     setTransactions((prev) => {
@@ -239,12 +358,27 @@ export function useSimulator(): UseSimulatorReturn {
       console.log(`Filtering to fraud only: ${fraudOnly.length} fraud out of ${prev.length} total`);
       return fraudOnly;
     });
-  }, [disconnectWebSocket]);
+  }, [disconnectWebSocket, stopDemoMode]);
 
   /**
    * Load demo data for showcase
    */
   const loadDemoData = useCallback(async () => {
+    // Demo mode: generate demo data locally
+    if (IS_DEMO_MODE) {
+      const demoTransactions: Transaction[] = Array.from({ length: 100 }, (_, i) => 
+        generateDemoTransaction(i + 1, i % 50 === 0) // ~2% fraud rate
+      );
+      setTransactions(demoTransactions);
+      transactionCounter.current = 100;
+      setStats(prev => ({
+        ...prev,
+        transactions_processed: 100,
+        fraud_count: demoTransactions.filter(t => t.is_fraud).length,
+      }));
+      return;
+    }
+    
     try {
       const response = await axios.get(`${API_BASE}/demo-data?limit=100`);
       if (Array.isArray(response.data)) {
@@ -286,6 +420,15 @@ export function useSimulator(): UseSimulatorReturn {
    * Reset simulator - clear transactions and reset backend counters
    */
   const resetSimulator = useCallback(async () => {
+    // Demo mode: reset locally
+    if (IS_DEMO_MODE) {
+      stopDemoMode();
+      setTransactions([]);
+      transactionCounter.current = 0;
+      setStats(prev => ({ ...prev, transactions_processed: 0, fraud_count: 0, is_running: false }));
+      return;
+    }
+    
     try {
       await axios.post(`${API_BASE}/control/reset`);
       setTransactions([]);
@@ -296,12 +439,24 @@ export function useSimulator(): UseSimulatorReturn {
       console.error('Failed to reset simulator:', err);
       setError('Failed to reset simulator');
     }
-  }, [disconnectWebSocket]);
+  }, [disconnectWebSocket, stopDemoMode]);
 
   /**
    * Fetch SHAP explanation for a transaction
    */
   const fetchExplanation = useCallback(async (features: number[]): Promise<ShapExplanation | null> => {
+    // Demo mode: return mock SHAP explanation
+    if (IS_DEMO_MODE) {
+      const featureNames = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
+      return {
+        base_value: 0.5,
+        shap_values: featureNames.map(() => (Math.random() - 0.5) * 0.2),
+        feature_names: featureNames,
+        feature_values: features.slice(0, 10),
+        prediction: features.reduce((a, b) => a + b, 0) > 0 ? 0.7 : 0.3,
+      };
+    }
+    
     try {
       const response = await axios.post(`${API_BASE}/explain`, features);
       return response.data;
@@ -314,19 +469,26 @@ export function useSimulator(): UseSimulatorReturn {
   // Initial status fetch and WebSocket connection
   useEffect(() => {
     fetchStatus();
-    // always try to connect websocket on mount
+    // always try to connect websocket on mount (or set demo mode connected)
     connectWebSocket();
-    const interval = setInterval(fetchStatus, 5000);
+    
+    // Only poll for status if not in demo mode
+    if (!IS_DEMO_MODE) {
+      const interval = setInterval(fetchStatus, 5000);
+      return () => {
+        clearInterval(interval);
+        disconnectWebSocket();
+      };
+    }
     
     return () => {
-      clearInterval(interval);
-      disconnectWebSocket();
+      stopDemoMode();
     };
-  }, [fetchStatus, disconnectWebSocket, connectWebSocket]);
+  }, [fetchStatus, disconnectWebSocket, connectWebSocket, stopDemoMode]);
 
-  // Reconnect WebSocket if disconnected while running
+  // Reconnect WebSocket if disconnected while running (skip in demo mode)
   useEffect(() => {
-    if (isRunning && connectionStatus === 'disconnected') {
+    if (!IS_DEMO_MODE && isRunning && connectionStatus === 'disconnected') {
       connectWebSocket();
     }
   }, [isRunning, connectionStatus, connectWebSocket]);
@@ -338,6 +500,7 @@ export function useSimulator(): UseSimulatorReturn {
     loading,
     error,
     connectionStatus,
+    isDemoMode: IS_DEMO_MODE,
     startSimulation,
     stopSimulation,
     toggleSimulation,

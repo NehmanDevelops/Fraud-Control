@@ -125,6 +125,7 @@ export default function App() {
     loading,
     error,
     connectionStatus,
+    isDemoMode,
     toggleSimulation,
     updateSpeed,
     injectFraud,
@@ -196,13 +197,20 @@ export default function App() {
     return <LoadingScreen />;
   }
 
-  // Error state
-  if (error && !stats.models_ready) {
+  // Error state - skip in demo mode since we work offline
+  if (error && !stats.models_ready && !isDemoMode) {
     return <ErrorScreen error={error} onRetry={() => window.location.reload()} />;
   }
 
   return (
     <div className={cn('min-h-screen text-white overflow-y-auto', isDark ? 'bg-slate-950' : 'bg-white light text-slate-900')}>
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white text-center py-2 text-sm font-medium">
+          🎮 Demo Mode - Running with simulated data (no backend required)
+        </div>
+      )}
+      
       {/* Header */}
       <Header
         isRunning={isRunning}
