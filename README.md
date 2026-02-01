@@ -1,6 +1,10 @@
 # FraudGuard Simulator 🛡️
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-000000?style=flat-square&logo=vercel)](https://fraud-control.vercel.app)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live-222222?style=flat-square&logo=github)](https://nehmandevelops.github.io/Fraud-Control/)
+
 Real-time fraud detection dashboard using ML to catch fraudulent transactions.
+
 
 ## What It Does
 
